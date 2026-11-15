@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>All Flats - House Management</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .flat-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media(min-width: 600px) { .flat-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media(min-width: 900px) { .flat-grid { grid-template-columns: repeat(3, 1fr); } }
+    .flat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; position: relative; }
+    .flat-card.occupied { border-left: 4px solid var(--success); }
+    .flat-card.vacant { border-left: 4px solid var(--warning); }
+    .flat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .flat-number { font-size: 18px; font-weight: 700; }
+    .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .badge.occ { background: #d1fae5; color: #065f46; }
+    .badge.vac { background: #fef3c7; color: #92400e; }
+    .flat-details { font-size: 13px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">House Manage</div>
+    <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
+    <a href="flats.html" class="nav-item active">🏢 All Flats</a>
+    <a href="tenants.html" class="nav-item">👥 Tenants</a>
+    <a href="payments.html" class="nav-item">💵 Rent Collection</a>
+    <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
+  </aside>
+
+  <main class="main-content">
+    <div class="container">
+      <h1 class="page-title">All Flats Overview</h1>
+      <div class="flat-grid" id="flatsContainer">
+        <div class="empty">Loading flats...</div>
+      </div>
+    </div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="flats.html" class="b-nav-item active">🏢 Flats</a>
+    <a href="tenants.html" class="b-nav-item">👥 Tenants</a>
+    <a href="payments.html" class="b-nav-item">💵 Payments</a>
+    <a href="more.html" class="b-nav-item">☰ More</a>
+  </nav>
+
+  <script src="app.js"></script>
+  <script>
+    async function loadFlats() {
+      const data = await apiCall('getFlats');
+      const container = document.getElementById('flatsContainer');
+      
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty">No flats found.</div>';
+        return;
+      }
+
+      container.innerHTML = data.map(f => `
+        <div class="flat-card ${f.status.toLowerCase()}">
+          <div class="flat-header">
+            <div class="flat-number">Flat ${f.flatNumber}</div>
+            <div class="badge ${f.status === 'Occupied' ? 'occ' : 'vac'}">${f.status}</div>
+          </div>
+          <div class="flat-details">
+            <div><strong>Name:</strong> ${f.flatName}</div>
+            <div><strong>Floor:</strong> ${f.floor} | <strong>Direction:</strong> ${f.direction}</div>
+            <div><strong>Tenant:</strong> ${f.tenantName}</div>
+            <div><strong>Rent:</strong> ৳ ${f.rent}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+    loadFlats();
+  </script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dashboard - House Management</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="brand">House Manage</div>
+    <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
+    <a href="flats.html" class="nav-item">🏢 All Flats</a>
+    <a href="tenants.html" class="nav-item">👥 Tenants</a>
+    <a href="payments.html" class="nav-item">💵 Rent Collection</a>
+    <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
+  </aside>
+
+  <main class="main-content">
+    <div class="container">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h1 class="page-title" style="margin: 0;">Hello, <span class="user-name-display">Admin</span>!</h1>
+          <p style="color: var(--text-muted); font-size: 14px;">Here is your property overview.</p>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">Total Flats</div>
+          <div class="kpi-value" id="kpi-total">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Occupied</div>
+          <div class="kpi-value" style="color: var(--success);" id="kpi-occupied">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Vacant</div>
+          <div class="kpi-value" style="color: var(--warning);" id="kpi-vacant">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">This Month Col.</div>
+          <div class="kpi-value" id="kpi-collected">৳ 0</div>
+        </div>
+      </div>
+
+      <!-- Analytics Chart -->
+      <div class="card">
+        <h3 style="font-size: 16px; margin-bottom: 16px;">Rent Collection Trend (6 Months)</h3>
+        <div style="position: relative; height: 250px; width: 100%;">
+          <canvas id="collectionChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <button class="fab" onclick="window.location.href='payments.html'">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+  </button>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="flats.html" class="b-nav-item">🏢 Flats</a>
+    <a href="tenants.html" class="b-nav-item">👥 Tenants</a>
+    <a href="payments.html" class="b-nav-item">💵 Payments</a>
+    <a href="more.html" class="b-nav-item">☰ More</a>
+  </nav>
+
+  <script src="app.js"></script>
+  <script>
+    async function loadDashboard() {
+      const data = await apiCall('getDashboardData');
+      if (!data) return;
+
+      document.getElementById('kpi-total').textContent = data.totalFlats;
+      document.getElementById('kpi-occupied').textContent = data.occupied;
+      document.getElementById('kpi-vacant').textContent = data.vacant;
+      document.getElementById('kpi-collected').textContent = '৳ ' + data.collectedThisMonth.toLocaleString();
+
+      // Render Chart
+      const ctx = document.getElementById('collectionChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.chartData.labels,
+          datasets: [{
+            label: 'Collected Rent (৳)',
+            data: data.chartData.collections,
+            borderColor: '#0f766e',
+            backgroundColor: 'rgba(15, 118, 110, 0.1)',
+            borderWidth: 3,
+            tension: 0.4,
+            fill: true,
+            pointBackgroundColor: '#0f766e'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { borderDash: [5, 5] } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+    loadDashboard();
+  </script>
+</body>
+</html>

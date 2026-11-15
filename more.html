@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>More Options - House Management</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">House Manage</div>
+    <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
+    <a href="flats.html" class="nav-item">🏢 All Flats</a>
+    <a href="tenants.html" class="nav-item">👥 Tenants</a>
+    <a href="payments.html" class="nav-item">💵 Rent Collection</a>
+    <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
+  </aside>
+
+  <main class="main-content">
+    <div class="container">
+      <h1 class="page-title">More Options</h1>
+      <div class="card">
+        <div class="list-item" style="cursor: pointer;" onclick="window.location.href='dashboard.html'">
+          <div class="list-title">📈 Performance & Analytics</div>
+          <div class="list-desc">Coming soon</div>
+        </div>
+        <div class="list-item" style="cursor: pointer;" onclick="window.location.href='dashboard.html'">
+          <div class="list-title">📄 Reports</div>
+          <div class="list-desc">Download income & expense reports</div>
+        </div>
+        <div class="list-item" style="cursor: pointer;" onclick="logout()">
+          <div class="list-title" style="color: var(--danger);">🚪 Logout</div>
+          <div class="list-desc">Sign out from the system</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="flats.html" class="b-nav-item">🏢 Flats</a>
+    <a href="tenants.html" class="b-nav-item">👥 Tenants</a>
+    <a href="payments.html" class="b-nav-item">💵 Payments</a>
+    <a href="more.html" class="b-nav-item active">☰ More</a>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>

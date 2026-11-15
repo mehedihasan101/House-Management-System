@@ -1,0 +1,10 @@
+Development ID: 
+AKfycbxsBCV70hntf4AyPjT4JVczumngcxN8WklxQAnfiePvMgc_tmgcFPzLW73aB4iX7MYT
+
+
+Web app url: 
+https://script.google.com/macros/s/AKfycbykPJvNU51di1mmws7iwbFpFn51UuRBIYcBt0P5ZX6zZVEd9UAGo7xMeiX9Yg-RBeSb/exec
+
+sheet id: 
+https://docs.google.com/spreadsheets/d/1jHR0qRDzWExgBmn47-sD4w4DlRYJlsUiaXe35NOocJY/edit?usp=sharing
+

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Rent Collection - House Management</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .pay-list { display: flex; flex-direction: column; gap: 10px; }
+    .pay-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .pay-info h4 { margin: 0 0 4px 0; font-size: 15px; }
+    .pay-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
+    .pay-amount { font-size: 16px; font-weight: 700; color: var(--success); }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--surface); width: 100%; max-width: 500px; border-radius: var(--radius); padding: 20px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
+    .modal-header h2 { margin: 0; font-size: 18px; }
+    .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">House Manage</div>
+    <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
+    <a href="flats.html" class="nav-item">🏢 All Flats</a>
+    <a href="tenants.html" class="nav-item">👥 Tenants</a>
+    <a href="payments.html" class="nav-item active">💵 Rent Collection</a>
+    <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
+  </aside>
+
+  <main class="main-content">
+    <div class="container">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h1 class="page-title" style="margin: 0;">Payments</h1>
+        <button class="btn btn-primary" onclick="openModal()">+ Collect Rent</button>
+      </div>
+      <div class="pay-list" id="paymentContainer">
+        <div class="empty">Loading payments...</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Collect Rent Modal -->
+  <div class="modal-overlay" id="paymentModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Collect Rent</h2>
+        <button class="close-btn" onclick="closeModal()">×</button>
+      </div>
+      <form id="collectRentForm">
+        <div class="input-group">
+          <label>Select Tenant</label>
+          <select id="tenantSelect" required>
+            <option value="">Loading tenants...</option>
+          </select>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="input-group">
+            <label>Rent Month</label>
+            <input type="month" id="pMonth" required>
+          </div>
+          <div class="input-group">
+            <label>Payment Date</label>
+            <input type="date" id="pDate" required>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="input-group">
+            <label>Amount (৳)</label>
+            <input type="number" id="pAmount" required>
+          </div>
+          <div class="input-group">
+            <label>Method</label>
+            <select id="pMethod">
+              <option value="Cash">Cash</option>
+              <option value="bKash">bKash</option>
+              <option value="Bank">Bank</option>
+            </select>
+          </div>
+        </div>
+        <div class="input-group">
+          <label>Transaction ID (Optional)</label>
+          <input type="text" id="pTrxId">
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="savePaymentBtn">Save Payment</button>
+      </form>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="flats.html" class="b-nav-item">🏢 Flats</a>
+    <a href="tenants.html" class="b-nav-item">👥 Tenants</a>
+    <a href="payments.html" class="b-nav-item active">💵 Payments</a>
+    <a href="more.html" class="b-nav-item">☰ More</a>
+  </nav>
+
+  <script src="app.js"></script>
+  <script>
+    let activeTenants = [];
+
+    async function loadPayments() {
+      const data = await apiCall('getPayments');
+      const container = document.getElementById('paymentContainer');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty">No payments recorded yet.</div>';
+        return;
+      }
+      container.innerHTML = data.map(p => `
+        <div class="pay-card">
+          <div class="pay-info">
+            <h4>${p.tenantName} (Flat ${p.flatNumber})</h4>
+            <p>Month: ${p.rentMonth} | Method: ${p.method}</p>
+            <p>Date: ${p.date}</p>
+          </div>
+          <div class="pay-amount">৳ ${p.amount}</div>
+        </div>
+      `).join('');
+    }
+
+    async function loadTenantsForDropdown() {
+      const allTenants = await apiCall('getTenants');
+      activeTenants = allTenants.filter(t => t.status === 'Active');
+      const select = document.getElementById('tenantSelect');
+      if (activeTenants.length === 0) {
+        select.innerHTML = '<option value="">No active tenants</option>';
+        return;
+      }
+      select.innerHTML = '<option value="">Select Tenant</option>' + 
+        activeTenants.map(t => `<option value="${t.tenantId}">${t.flatNumber} - ${t.name}</option>`).join('');
+    }
+
+    // টেন্যান্ট সিলেক্ট করলে টাকার অ্যামাউন্ট অটো বসে যাবে
+    document.getElementById('tenantSelect').addEventListener('change', function() {
+      const tenant = activeTenants.find(t => t.tenantId === this.value);
+      if (tenant) document.getElementById('pAmount').value = tenant.rent;
+    });
+
+    function openModal() {
+      document.getElementById('paymentModal').classList.add('active');
+      loadTenantsForDropdown();
+      document.getElementById('pDate').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('pMonth').value = new Date().toISOString().slice(0, 7);
+    }
+
+    function closeModal() {
+      document.getElementById('paymentModal').classList.remove('active');
+      document.getElementById('collectRentForm').reset();
+    }
+
+    document.getElementById('collectRentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('savePaymentBtn');
+      btn.textContent = 'Saving...'; btn.disabled = true;
+
+      const select = document.getElementById('tenantSelect');
+      const tenant = activeTenants.find(t => t.tenantId === select.value);
+
+      const payData = {
+        flatNumber: tenant.flatNumber,
+        flatName: tenant.flatName,
+        tenantName: tenant.name,
+        nid: tenant.nid,
+        rentMonth: document.getElementById('pMonth').value,
+        date: document.getElementById('pDate').value,
+        amount: document.getElementById('pAmount').value,
+        method: document.getElementById('pMethod').value,
+        trxId: document.getElementById('pTrxId').value,
+        status: 'Paid'
+      };
+
+      const res = await apiCall('collectRent', { data: payData, user: session.name });
+      btn.textContent = 'Save Payment'; btn.disabled = false;
+
+      if (res) {
+        alert('Payment saved successfully!');
+        closeModal();
+        loadPayments();
+      }
+    });
+
+    loadPayments();
+  </script>
+</body>
+</html>

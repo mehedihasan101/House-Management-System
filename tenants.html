@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Tenants - House Management</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .tenant-list { display: flex; flex-direction: column; gap: 10px; }
+    .tenant-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .tenant-info h4 { margin: 0 0 4px 0; font-size: 15px; }
+    .tenant-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--surface); width: 100%; max-width: 500px; border-radius: var(--radius); padding: 20px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
+    .modal-header h2 { margin: 0; font-size: 18px; }
+    .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">House Manage</div>
+    <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
+    <a href="flats.html" class="nav-item">🏢 All Flats</a>
+    <a href="tenants.html" class="nav-item active">👥 Tenants</a>
+    <a href="payments.html" class="nav-item">💵 Rent Collection</a>
+    <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
+  </aside>
+
+  <main class="main-content">
+    <div class="container">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h1 class="page-title" style="margin: 0;">Tenants</h1>
+        <button class="btn btn-primary" onclick="openModal()">+ Add Tenant</button>
+      </div>
+      <div class="tenant-list" id="tenantContainer">
+        <div class="empty">Loading tenants...</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add Tenant Modal -->
+  <div class="modal-overlay" id="tenantModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Add New Tenant</h2>
+        <button class="close-btn" onclick="closeModal()">×</button>
+      </div>
+      <form id="addTenantForm">
+        <div class="input-group">
+          <label>Select Vacant Flat</label>
+          <select id="flatSelect" required>
+            <option value="">Loading flats...</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Tenant Name</label>
+          <input type="text" id="tName" required placeholder="Enter full name">
+        </div>
+        <div class="input-group">
+          <label>NID Number</label>
+          <input type="text" id="tNid" required placeholder="Enter NID">
+        </div>
+        <div class="input-group">
+          <label>Phone Number</label>
+          <input type="tel" id="tPhone" required placeholder="01XXXXXXXXX">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="input-group">
+            <label>Rent (৳)</label>
+            <input type="number" id="tRent" required>
+          </div>
+          <div class="input-group">
+            <label>Advance (৳)</label>
+            <input type="number" id="tAdvance" value="0">
+          </div>
+        </div>
+        <div class="input-group">
+          <label>Move-in Date</label>
+          <input type="date" id="tMoveIn" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="saveTenantBtn">Save Tenant</button>
+      </form>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="flats.html" class="b-nav-item">🏢 Flats</a>
+    <a href="tenants.html" class="b-nav-item active">👥 Tenants</a>
+    <a href="payments.html" class="b-nav-item">💵 Payments</a>
+    <a href="more.html" class="b-nav-item">☰ More</a>
+  </nav>
+
+  <script src="app.js"></script>
+  <script>
+    let allFlats = [];
+
+    async function loadTenants() {
+      const data = await apiCall('getTenants');
+      const container = document.getElementById('tenantContainer');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty">No tenants found. Click Add Tenant to add one.</div>';
+        return;
+      }
+      container.innerHTML = data.map(t => `
+        <div class="tenant-card">
+          <div class="tenant-info">
+            <h4>${t.name} (Flat ${t.flatNumber})</h4>
+            <p>📞 ${t.phone} | Rent: ৳${t.rent}</p>
+            <p style="color: ${t.status === 'Active' ? 'var(--success)' : 'var(--danger)'}">${t.status}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function loadFlatsForDropdown() {
+      allFlats = await apiCall('getFlats');
+      const select = document.getElementById('flatSelect');
+      const vacantFlats = allFlats.filter(f => f.status === 'Vacant');
+      
+      if (vacantFlats.length === 0) {
+        select.innerHTML = '<option value="">No vacant flats available</option>';
+        return;
+      }
+      select.innerHTML = '<option value="">Select a flat</option>' + 
+        vacantFlats.map(f => `<option value="${f.flatNumber}" data-name="${f.flatName}">${f.flatNumber} - ${f.flatName}</option>`).join('');
+    }
+
+    function openModal() {
+      document.getElementById('tenantModal').classList.add('active');
+      loadFlatsForDropdown();
+      document.getElementById('tMoveIn').value = new Date().toISOString().slice(0, 10);
+    }
+
+    function closeModal() {
+      document.getElementById('tenantModal').classList.remove('active');
+      document.getElementById('addTenantForm').reset();
+    }
+
+    document.getElementById('addTenantForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('saveTenantBtn');
+      btn.textContent = 'Saving...'; btn.disabled = true;
+
+      const flatSelect = document.getElementById('flatSelect');
+      const flatNumber = flatSelect.value;
+      const flatName = flatSelect.options[flatSelect.selectedIndex].getAttribute('data-name');
+
+      const tenantData = {
+        flatNumber: flatNumber,
+        flatName: flatName,
+        name: document.getElementById('tName').value,
+        nid: document.getElementById('tNid').value,
+        phone: document.getElementById('tPhone').value,
+        rent: document.getElementById('tRent').value,
+        advance: document.getElementById('tAdvance').value || 0,
+        moveIn: document.getElementById('tMoveIn').value,
+        description: ''
+      };
+
+      const res = await apiCall('addTenant', { data: tenantData, user: session.name });
+      btn.textContent = 'Save Tenant'; btn.disabled = false;
+
+      if (res) {
+        alert('Tenant added successfully!');
+        closeModal();
+        loadTenants();
+      }
+    });
+
+    loadTenants();
+  </script>
+</body>
+</html>
