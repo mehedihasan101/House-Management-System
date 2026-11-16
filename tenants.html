@@ -6,10 +6,30 @@
   <title>Tenants - House Management</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    .tenant-list { display: flex; flex-direction: column; gap: 10px; }
+    .filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-bar input, .filter-bar select { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; background: var(--surface); min-width: 150px; }
+    .filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); }
+
+    .tenant-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
     .tenant-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .tenant-card.inactive { background: #f8fafc; opacity: 0.85; border-color: #cbd5e1; }
+    
     .tenant-info h4 { margin: 0 0 4px 0; font-size: 15px; }
-    .tenant-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
+    .tenant-info p { margin: 0; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+    
+    .date-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .date-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+    .badge-in { background: #dcfce7; color: #166534; }
+    .badge-out { background: #fee2e2; color: #991b1b; }
+    .badge-ongoing { background: #e0f2fe; color: #0369a1; }
+
+    .action-btns { display: flex; flex-direction: column; gap: 6px; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; }
+    .btn-edit { background: #e0f2fe; color: #0369a1; }
+    .btn-moveout { background: #fee2e2; color: #b91c1c; }
+
+    .section-title { font-size: 16px; font-weight: 700; color: var(--text-main); margin: 20px 0 10px 0; display: flex; align-items: center; gap: 8px; }
+
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
     .modal-overlay.active { display: flex; }
     .modal { background: var(--surface); width: 100%; max-width: 500px; border-radius: var(--radius); padding: 20px; max-height: 90vh; overflow-y: auto; }
@@ -34,22 +54,41 @@
         <h1 class="page-title" style="margin: 0;">Tenants</h1>
         <button class="btn btn-primary" onclick="openModal()">+ Add Tenant</button>
       </div>
-      <div class="tenant-list" id="tenantContainer">
-        <div class="empty">Loading tenants...</div>
+
+      <!-- Search & Filter Bar (এখানে oninput/onchange সরিয়ে দেওয়া হয়েছে) -->
+      <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="🔍 Search by Name, Flat Number...">
+        <select id="statusFilter">
+          <option value="All">All Tenants</option>
+          <option value="Active">Active Only</option>
+          <option value="Inactive">Inactive Only</option>
+        </select>
+      </div>
+
+      <div id="activeSection">
+        <div class="section-title">🟢 Active Tenants</div>
+        <div class="tenant-list" id="activeTenantContainer"></div>
+      </div>
+
+      <div id="inactiveSection">
+        <div class="section-title" style="color: var(--text-muted); margin-top: 32px;">⚪ Previous Tenants</div>
+        <div class="tenant-list" id="inactiveTenantContainer"></div>
       </div>
     </div>
   </main>
 
-  <!-- Add Tenant Modal -->
+  <!-- Add / Edit Tenant Modal -->
   <div class="modal-overlay" id="tenantModal">
     <div class="modal">
       <div class="modal-header">
-        <h2>Add New Tenant</h2>
+        <h2 id="modalTitle">Add New Tenant</h2>
         <button class="close-btn" onclick="closeModal()">×</button>
       </div>
-      <form id="addTenantForm">
+      <form id="tenantForm">
+        <input type="hidden" id="editTenantId">
+        
         <div class="input-group">
-          <label>Select Vacant Flat</label>
+          <label>Flat <span id="flatHint" style="font-size:11px; color:var(--danger); font-weight:normal;"></span></label>
           <select id="flatSelect" required>
             <option value="">Loading flats...</option>
           </select>
@@ -76,12 +115,33 @@
             <input type="number" id="tAdvance" value="0">
           </div>
         </div>
-        <div class="input-group">
+        
+        <div class="input-group" id="moveInGroup">
           <label>Move-in Date</label>
           <input type="date" id="tMoveIn" required>
         </div>
+        
         <button type="submit" class="btn btn-primary btn-full" id="saveTenantBtn">Save Tenant</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Move Out Modal -->
+  <div class="modal-overlay" id="moveOutModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Move Out Tenant</h2>
+        <button class="close-btn" onclick="closeMoveOutModal()">×</button>
+      </div>
+      <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">
+        Select the move-out date for <b id="moveOutTenantName" style="color: var(--text-main);"></b>. 
+        This will automatically make the flat Vacant.
+      </p>
+      <div class="input-group">
+        <label>Move Out Date</label>
+        <input type="date" id="moveOutDate" required>
+      </div>
+      <button class="btn btn-primary btn-full" style="background: var(--danger); border-color: var(--danger);" onclick="confirmMoveOut()" id="confirmMoveOutBtn">Confirm Move Out</button>
     </div>
   </div>
 
@@ -96,50 +156,156 @@
   <script src="app.js"></script>
   <script>
     let allFlats = [];
+    let allTenantsData = [];
+    let currentMoveOutId = null;
 
-    async function loadTenants() {
-      const data = await apiCall('getTenants');
-      const container = document.getElementById('tenantContainer');
-      if (!data || data.length === 0) {
-        container.innerHTML = '<div class="empty">No tenants found. Click Add Tenant to add one.</div>';
-        return;
-      }
-      container.innerHTML = data.map(t => `
-        <div class="tenant-card">
-          <div class="tenant-info">
-            <h4>${t.name} (Flat ${t.flatNumber})</h4>
-            <p>📞 ${t.phone} | Rent: ৳${t.rent}</p>
-            <p style="color: ${t.status === 'Active' ? 'var(--success)' : 'var(--danger)'}">${t.status}</p>
-          </div>
-        </div>
-      `).join('');
+    // ডেট ফরম্যাট ফাংশন
+    function formatMonthYear(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     }
 
-    async function loadFlatsForDropdown() {
+    // ডেটা লোড
+    async function loadData() {
+      const data = await apiCall('getTenants');
+      // ডেটা না আসলে খালি অ্যারে সেট হবে যাতে সার্চে এরর না করে
+      allTenantsData = Array.isArray(data) ? data : []; 
+      renderTenants();
+    }
+
+    // UI রেন্ডার এবং সার্চ ফিল্টারিং
+    function renderTenants() {
+      const searchText = document.getElementById('searchInput').value.trim().toLowerCase();
+      const statusFilter = document.getElementById('statusFilter').value;
+
+      // সার্চ ও স্ট্যাটাস ফিল্টার লজিক
+      const filteredData = allTenantsData.filter(t => {
+        const nameMatch = (t.name || '').toLowerCase().includes(searchText);
+        const flatMatch = (String(t.flatNumber) || '').toLowerCase().includes(searchText);
+        const flatNameMatch = (t.flatName || '').toLowerCase().includes(searchText);
+        
+        const matchSearch = nameMatch || flatMatch || flatNameMatch;
+        const matchStatus = statusFilter === 'All' || t.status === statusFilter;
+
+        return matchSearch && matchStatus;
+      });
+
+      const activeTenants = filteredData.filter(t => t.status === 'Active');
+      const inactiveTenants = filteredData.filter(t => t.status !== 'Active');
+
+      // ফিল্টার অনুযায়ী সেকশন দেখানো/লুকানো
+      document.getElementById('activeSection').style.display = (statusFilter === 'Inactive') ? 'none' : 'block';
+      document.getElementById('inactiveSection').style.display = (statusFilter === 'Active') ? 'none' : 'block';
+
+      const activeContainer = document.getElementById('activeTenantContainer');
+      const inactiveContainer = document.getElementById('inactiveTenantContainer');
+
+      // 🟢 Active Tenants রেন্ডার
+      if (activeTenants.length === 0) {
+        activeContainer.innerHTML = '<div class="empty">No active tenants found.</div>';
+      } else {
+        activeContainer.innerHTML = activeTenants.map(t => `
+          <div class="tenant-card">
+            <div class="tenant-info">
+              <h4>${t.name} <span style="font-size: 12px; font-weight: normal; color: var(--primary);">(Flat ${t.flatNumber})</span></h4>
+              <p>📞 ${t.phone} | Rent: ৳${t.rent}</p>
+              <div class="date-badges">
+                <span class="date-badge badge-in">In: ${formatMonthYear(t.moveIn)}</span>
+                <span class="date-badge badge-ongoing">Ongoing</span>
+              </div>
+            </div>
+            <div class="action-btns">
+              <button class="btn-sm btn-edit" onclick="editTenant('${t.tenantId}')">Edit</button>
+              <button class="btn-sm btn-moveout" onclick="openMoveOutModal('${t.tenantId}')">Move Out</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // ⚪ Previous Tenants রেন্ডার
+      if (inactiveTenants.length === 0) {
+        inactiveContainer.innerHTML = '<div class="empty">No previous tenants found.</div>';
+      } else {
+        inactiveContainer.innerHTML = inactiveTenants.map(t => `
+          <div class="tenant-card inactive">
+            <div class="tenant-info">
+              <h4>${t.name} <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">(Flat ${t.flatNumber})</span></h4>
+              <p>📞 ${t.phone}</p>
+              <div class="date-badges">
+                <span class="date-badge badge-in">In: ${formatMonthYear(t.moveIn)}</span>
+                <span class="date-badge badge-out">Out: ${formatMonthYear(t.moveOut) || 'N/A'}</span>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    async function loadFlatsForDropdown(currentFlat = null) {
       allFlats = await apiCall('getFlats');
       const select = document.getElementById('flatSelect');
-      const vacantFlats = allFlats.filter(f => f.status === 'Vacant');
+      const hint = document.getElementById('flatHint');
       
-      if (vacantFlats.length === 0) {
+      let availableFlats = allFlats.filter(f => f.status === 'Vacant' || f.flatNumber === currentFlat);
+      
+      if (availableFlats.length === 0 && !currentFlat) {
         select.innerHTML = '<option value="">No vacant flats available</option>';
+        hint.textContent = "(All flats are occupied. Move out a tenant first.)";
         return;
       }
+      
+      hint.textContent = "";
       select.innerHTML = '<option value="">Select a flat</option>' + 
-        vacantFlats.map(f => `<option value="${f.flatNumber}" data-name="${f.flatName}">${f.flatNumber} - ${f.flatName}</option>`).join('');
+        availableFlats.map(f => `<option value="${f.flatNumber}" data-name="${f.flatName}" ${f.flatNumber === currentFlat ? 'selected' : ''}>${f.flatNumber} - ${f.flatName}</option>`).join('');
     }
 
     function openModal() {
+      document.getElementById('modalTitle').textContent = 'Add New Tenant';
+      document.getElementById('tenantForm').reset();
+      document.getElementById('editTenantId').value = '';
+      document.getElementById('flatSelect').disabled = false;
+      
+      // Add করার সময় Move-in Date দেখাবে
+      document.getElementById('moveInGroup').style.display = 'block';
+      document.getElementById('tMoveIn').setAttribute('required', 'true');
+      document.getElementById('tMoveIn').value = new Date().toISOString().slice(0, 10);
+
       document.getElementById('tenantModal').classList.add('active');
       loadFlatsForDropdown();
-      document.getElementById('tMoveIn').value = new Date().toISOString().slice(0, 10);
+    }
+
+    function editTenant(tenantId) {
+      const t = allTenantsData.find(x => x.tenantId === tenantId);
+      if (!t) return;
+
+      document.getElementById('modalTitle').textContent = 'Edit Tenant Info';
+      document.getElementById('editTenantId').value = t.tenantId;
+      
+      document.getElementById('tName').value = t.name;
+      document.getElementById('tNid').value = t.nid;
+      document.getElementById('tPhone').value = t.phone;
+      document.getElementById('tRent').value = t.rent;
+      document.getElementById('tAdvance').value = t.advance;
+      
+      // Edit করার সময় Move-in Date লুকানো থাকবে
+      document.getElementById('moveInGroup').style.display = 'none';
+      document.getElementById('tMoveIn').removeAttribute('required');
+      document.getElementById('tMoveIn').value = t.moveIn;
+
+      loadFlatsForDropdown(t.flatNumber);
+      document.getElementById('flatSelect').disabled = true; 
+
+      document.getElementById('tenantModal').classList.add('active');
     }
 
     function closeModal() {
       document.getElementById('tenantModal').classList.remove('active');
-      document.getElementById('addTenantForm').reset();
+      document.getElementById('tenantForm').reset();
     }
 
-    document.getElementById('addTenantForm').addEventListener('submit', async (e) => {
+    document.getElementById('tenantForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('saveTenantBtn');
       btn.textContent = 'Saving...'; btn.disabled = true;
@@ -147,30 +313,99 @@
       const flatSelect = document.getElementById('flatSelect');
       const flatNumber = flatSelect.value;
       const flatName = flatSelect.options[flatSelect.selectedIndex].getAttribute('data-name');
+      const editId = document.getElementById('editTenantId').value;
 
       const tenantData = {
-        flatNumber: flatNumber,
-        flatName: flatName,
         name: document.getElementById('tName').value,
         nid: document.getElementById('tNid').value,
         phone: document.getElementById('tPhone').value,
         rent: document.getElementById('tRent').value,
         advance: document.getElementById('tAdvance').value || 0,
         moveIn: document.getElementById('tMoveIn').value,
+        flatNumber: flatNumber,
+        flatName: flatName,
         description: ''
       };
 
-      const res = await apiCall('addTenant', { data: tenantData, user: session.name });
+      let res;
+      if (editId) {
+        tenantData.tenantId = editId;
+        tenantData.status = 'Active';
+        res = await apiCall('updateTenant', { data: tenantData, user: session.name });
+      } else {
+        res = await apiCall('addTenant', { data: tenantData, user: session.name });
+      }
+
       btn.textContent = 'Save Tenant'; btn.disabled = false;
 
       if (res) {
-        alert('Tenant added successfully!');
+        alert(editId ? 'Tenant updated successfully!' : 'Tenant added successfully!');
         closeModal();
-        loadTenants();
+        loadData();
       }
     });
 
-    loadTenants();
+    // Move Out Modal Logic
+    function openMoveOutModal(tenantId) {
+      const t = allTenantsData.find(x => x.tenantId === tenantId);
+      if (!t) return;
+
+      currentMoveOutId = tenantId;
+      document.getElementById('moveOutTenantName').textContent = t.name;
+      document.getElementById('moveOutDate').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('moveOutModal').classList.add('active');
+    }
+
+    function closeMoveOutModal() {
+      document.getElementById('moveOutModal').classList.remove('active');
+      currentMoveOutId = null;
+    }
+
+    async function confirmMoveOut() {
+      const t = allTenantsData.find(x => x.tenantId === currentMoveOutId);
+      if (!t) return;
+
+      const moveOutDate = document.getElementById('moveOutDate').value;
+      if (!moveOutDate) {
+        alert('Please select a valid date.');
+        return;
+      }
+
+      const btn = document.getElementById('confirmMoveOutBtn');
+      btn.textContent = 'Processing...'; btn.disabled = true;
+
+      const tenantData = {
+        tenantId: t.tenantId,
+        flatNumber: t.flatNumber,
+        flatName: t.flatName,
+        name: t.name,
+        nid: t.nid,
+        phone: t.phone,
+        rent: t.rent,
+        advance: t.advance,
+        moveIn: t.moveIn,
+        moveOut: moveOutDate,
+        status: 'Inactive'
+      };
+
+      const res = await apiCall('updateTenant', { data: tenantData, user: session.name });
+      btn.textContent = 'Confirm Move Out'; btn.disabled = false;
+
+      if (res) {
+        closeMoveOutModal();
+        alert(`${t.name} has been moved out. Flat ${t.flatNumber} is now Vacant.`);
+        loadData();
+      }
+    }
+
+    // ==========================================
+    // ⚠️ এখানে ইভেন্ট লিসেনার যুক্ত করা হয়েছে
+    // ==========================================
+    document.getElementById('searchInput').addEventListener('input', renderTenants);
+    document.getElementById('statusFilter').addEventListener('change', renderTenants);
+
+    // পেজ লোড হলে ডেটা নিয়ে আসা
+    loadData();
   </script>
 </body>
 </html>

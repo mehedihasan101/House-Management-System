@@ -7,16 +7,44 @@
   <link rel="stylesheet" href="style.css">
   <style>
     .pay-list { display: flex; flex-direction: column; gap: 10px; }
-    .pay-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+    
+    /* পেমেন্ট কার্ড ডিজাইন */
+    .pay-card { 
+      background: var(--surface); 
+      border: 1px solid var(--border); 
+      border-radius: var(--radius); 
+      padding: 14px; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .pay-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .pay-info h4 { margin: 0 0 4px 0; font-size: 15px; }
     .pay-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
+    
+    /* টাকা এবং ব্যাজ ডিজাইন */
+    .pay-amount-wrapper { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
     .pay-amount { font-size: 16px; font-weight: 700; color: var(--success); }
+    .badge-container { display: flex; gap: 4px; }
+    
+    .month-badge { background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .from-badge { background: #f3e8ff; color: #7e22ce; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; display: flex; align-items: center; gap: 3px; }
+
+    /* মডাল CSS */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
     .modal-overlay.active { display: flex; }
     .modal { background: var(--surface); width: 100%; max-width: 500px; border-radius: var(--radius); padding: 20px; max-height: 90vh; overflow-y: auto; }
-    .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
+    .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
     .modal-header h2 { margin: 0; font-size: 18px; }
     .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+
+    /* ডিটেইলস লিস্ট */
+    .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 14px; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: var(--text-muted); font-weight: 500; }
+    .detail-value { font-weight: 600; text-align: right; }
   </style>
 </head>
 <body>
@@ -41,7 +69,7 @@
     </div>
   </main>
 
-  <!-- Collect Rent Modal -->
+  <!-- Collect Rent Modal (Add New) -->
   <div class="modal-overlay" id="paymentModal">
     <div class="modal">
       <div class="modal-header">
@@ -55,6 +83,7 @@
             <option value="">Loading tenants...</option>
           </select>
         </div>
+        
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="input-group">
             <label>Rent Month</label>
@@ -65,6 +94,7 @@
             <input type="date" id="pDate" required>
           </div>
         </div>
+
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="input-group">
             <label>Amount (৳)</label>
@@ -79,12 +109,31 @@
             </select>
           </div>
         </div>
+
+        <div class="input-group">
+          <label>Received From</label>
+          <input type="text" id="pReceivedFrom" placeholder="যেমন: নিজে, বাবা, ভাই" required>
+        </div>
+
         <div class="input-group">
           <label>Transaction ID (Optional)</label>
           <input type="text" id="pTrxId">
         </div>
         <button type="submit" class="btn btn-primary btn-full" id="savePaymentBtn">Save Payment</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Payment Details Modal (View) -->
+  <div class="modal-overlay" id="detailsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Payment Details</h2>
+        <button class="close-btn" onclick="closeDetailsModal()">×</button>
+      </div>
+      <div id="detailsContent">
+        <!-- Details will be injected here -->
+      </div>
     </div>
   </div>
 
@@ -99,24 +148,103 @@
   <script src="app.js"></script>
   <script>
     let activeTenants = [];
+    let allPayments = []; // ডিটেইলস দেখানোর জন্য ডেটা স্টোর করব
+
+    // নির্ভুলভাবে মাস বের করার ফাংশন (Timezone বাগ ফিক্স)
+    function formatMonth(monthStr) {
+      if(!monthStr) return 'N/A';
+      // যদি ডেটা "2026-10" বা "2026-10-01T..." হয়, তবে প্রথম ৭ অক্ষর নিবে (2026-10)
+      const match = String(monthStr).match(/^(\d{4})-(\d{2})/);
+      if (!match) return monthStr;
+      const year = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10) - 1; // জাভাস্ক্রিপ্টে মাস ০ থেকে শুরু
+      const date = new Date(year, month, 1);
+      return date.toLocaleString('en-US', { month: 'short', year: 'numeric' }); // যেমন: Oct 2026
+    }
 
     async function loadPayments() {
-      const data = await apiCall('getPayments');
+      allPayments = await apiCall('getPayments');
       const container = document.getElementById('paymentContainer');
-      if (!data || data.length === 0) {
+      
+      if (!allPayments || allPayments.length === 0) {
         container.innerHTML = '<div class="empty">No payments recorded yet.</div>';
         return;
       }
-      container.innerHTML = data.map(p => `
-        <div class="pay-card">
+
+      container.innerHTML = allPayments.map((p, index) => `
+        <div class="pay-card" onclick="showDetails(${index})">
           <div class="pay-info">
             <h4>${p.tenantName} (Flat ${p.flatNumber})</h4>
-            <p>Month: ${p.rentMonth} | Method: ${p.method}</p>
-            <p>Date: ${p.date}</p>
+            <p>Method: ${p.method} | Date: ${p.date}</p>
           </div>
-          <div class="pay-amount">৳ ${p.amount}</div>
+          <div class="pay-amount-wrapper">
+            <div class="pay-amount">৳ ${p.amount}</div>
+            <div class="badge-container">
+              <span class="month-badge">${formatMonth(p.rentMonth)}</span>
+              <span class="from-badge">👤 ${p.receivedFrom}</span>
+            </div>
+          </div>
         </div>
       `).join('');
+    }
+
+    // ক্লিক করলে ডিটেইলস মডাল দেখানোর ফাংশন
+    function showDetails(index) {
+      const p = allPayments[index];
+      const content = document.getElementById('detailsContent');
+      
+      content.innerHTML = `
+        <div class="detail-row">
+          <span class="detail-label">Payment ID</span>
+          <span class="detail-value">${p.paymentId}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Tenant Name</span>
+          <span class="detail-value">${p.tenantName}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Flat</span>
+          <span class="detail-value">${p.flatNumber} (${p.flatName})</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Rent Month</span>
+          <span class="detail-value" style="color: #0369a1;">${formatMonth(p.rentMonth)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Amount</span>
+          <span class="detail-value" style="color: var(--success); font-size: 16px;">৳ ${p.amount}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Payment Date</span>
+          <span class="detail-value">${p.date}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Method</span>
+          <span class="detail-value">${p.method}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Transaction ID</span>
+          <span class="detail-value">${p.trxId !== 'N/A' ? p.trxId : '—'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Received From</span>
+          <span class="detail-value">${p.receivedFrom}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Received By</span>
+          <span class="detail-value">${p.receivedBy}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="detail-value" style="color: var(--success);">${p.status}</span>
+        </div>
+      `;
+      
+      document.getElementById('detailsModal').classList.add('active');
+    }
+
+    function closeDetailsModal() {
+      document.getElementById('detailsModal').classList.remove('active');
     }
 
     async function loadTenantsForDropdown() {
@@ -131,7 +259,6 @@
         activeTenants.map(t => `<option value="${t.tenantId}">${t.flatNumber} - ${t.name}</option>`).join('');
     }
 
-    // টেন্যান্ট সিলেক্ট করলে টাকার অ্যামাউন্ট অটো বসে যাবে
     document.getElementById('tenantSelect').addEventListener('change', function() {
       const tenant = activeTenants.find(t => t.tenantId === this.value);
       if (tenant) document.getElementById('pAmount').value = tenant.rent;
@@ -166,6 +293,7 @@
         date: document.getElementById('pDate').value,
         amount: document.getElementById('pAmount').value,
         method: document.getElementById('pMethod').value,
+        receivedFrom: document.getElementById('pReceivedFrom').value,
         trxId: document.getElementById('pTrxId').value,
         status: 'Paid'
       };
@@ -176,10 +304,11 @@
       if (res) {
         alert('Payment saved successfully!');
         closeModal();
-        loadPayments();
+        loadPayments(); // লিস্ট রিফ্রেশ
       }
     });
 
+    // পেজ লোড হলে ডেটা নিয়ে আসা
     loadPayments();
   </script>
 </body>
