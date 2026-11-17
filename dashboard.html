@@ -6,6 +6,36 @@
   <title>Dashboard - House Management</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .kpi-grid-6 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+    @media(min-width: 768px) { .kpi-grid-6 { grid-template-columns: repeat(3, 1fr); } }
+    @media(min-width: 1024px) { .kpi-grid-6 { grid-template-columns: repeat(6, 1fr); } }
+    
+    .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; text-align: center; }
+    .kpi-title { font-size: 10px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; }
+    .kpi-value { font-size: 16px; font-weight: 700; color: var(--primary); }
+
+    /* চার্ট রেসপন্সিভ কন্টেইনার (মোবাইলের জন্য ছোট) */
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 180px; /* মোবাইলের জন্য ছোট সাইজ */
+    }
+    @media (min-width: 768px) {
+      .chart-container {
+        height: 280px; /* ডেস্কটপের জন্য বড় সাইজ */
+      }
+    }
+
+    .chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+    @media(min-width: 900px) { .chart-grid { grid-template-columns: 2fr 1fr; } }
+
+    .due-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .due-table th, .due-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    .due-table th { background: var(--bg); color: var(--text-muted); font-weight: 600; }
+    .due-table td { color: var(--text-main); }
+    .badge-due { background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; }
+  </style>
 </head>
 <body>
 
@@ -15,6 +45,9 @@
     <a href="flats.html" class="nav-item">🏢 All Flats</a>
     <a href="tenants.html" class="nav-item">👥 Tenants</a>
     <a href="payments.html" class="nav-item">💵 Rent Collection</a>
+    <a href="performance.html" class="nav-item">📈 Performance</a>
+    <a href="reports.html" class="nav-item">📄 Reports</a>
+     <a href="expenses.html" class="nav-item">💸 Expenses</a>
     <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
   </aside>
 
@@ -22,36 +55,83 @@
     <div class="container">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <div>
-          <h1 class="page-title" style="margin: 0;">Hello, <span class="user-name-display">Admin</span>!</h1>
-          <p style="color: var(--text-muted); font-size: 14px;">Here is your property overview.</p>
+          <h1 class="page-title" style="margin: 0; font-size: 20px;">Hello, <span class="user-name-display">Admin</span>!</h1>
+          <p style="color: var(--text-muted); font-size: 12px;">Here is your property overview.</p>
         </div>
       </div>
 
-      <!-- KPI Cards -->
-      <div class="kpi-grid">
+      <!-- 6 KPI Cards -->
+      <div class="kpi-grid-6">
         <div class="kpi-card">
           <div class="kpi-title">Total Flats</div>
-          <div class="kpi-value" id="kpi-total">0</div>
+          <div class="kpi-value" id="kpi-total-flats">0</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-title">Occupied</div>
-          <div class="kpi-value" style="color: var(--success);" id="kpi-occupied">0</div>
+          <div class="kpi-title">Active Tenants</div>
+          <div class="kpi-value" style="color: #0369a1;" id="kpi-tenants">0</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-title">Vacant</div>
-          <div class="kpi-value" style="color: var(--warning);" id="kpi-vacant">0</div>
+          <div class="kpi-title">Expected Rent</div>
+          <div class="kpi-value" id="kpi-expected">৳ 0</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-title">This Month Col.</div>
-          <div class="kpi-value" id="kpi-collected">৳ 0</div>
+          <div class="kpi-title">Received (This Month)</div>
+          <div class="kpi-value" style="color: var(--success);" id="kpi-received">৳ 0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Paid Tenants</div>
+          <div class="kpi-value" style="color: var(--success);" id="kpi-paid-tenants">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Prev. Overdue</div>
+          <div class="kpi-value" style="color: var(--danger);" id="kpi-overdue">৳ 0</div>
         </div>
       </div>
 
-      <!-- Analytics Chart -->
-      <div class="card">
-        <h3 style="font-size: 16px; margin-bottom: 16px;">Rent Collection Trend (6 Months)</h3>
-        <div style="position: relative; height: 250px; width: 100%;">
-          <canvas id="collectionChart"></canvas>
+      <!-- Charts Section -->
+      <div class="chart-grid">
+        <div class="card" style="margin-bottom: 0; padding: 12px;">
+          <h3 style="font-size: 13px; margin-bottom: 12px; text-align: center;">Expected vs Received (Last 6 Months)</h3>
+          <div class="chart-container">
+            <canvas id="collectionChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 0; padding: 12px;">
+          <h3 style="font-size: 13px; margin-bottom: 12px; text-align: center;">Current Month Status</h3>
+          <div class="chart-container">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending vs Completed Chart -->
+      <div class="card" style="margin-bottom: 16px; padding: 12px;">
+        <h3 style="font-size: 13px; margin-bottom: 12px; text-align: center;">Completed vs Pending Amount (Last 6 Months)</h3>
+        <div class="chart-container">
+          <canvas id="pendingChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Outstanding Dues List -->
+      <div class="card" style="padding: 12px;">
+        <h3 style="font-size: 14px; margin-bottom: 12px;">Tenant-wise Outstanding Dues</h3>
+        <div class="scroll" style="overflow-x: auto;">
+          <table class="due-table">
+            <thead>
+              <tr>
+                <th>Tenant</th>
+                <th>Flat</th>
+                <th>Rent</th>
+                <th>Paid</th>
+                <th>Due</th>
+                <th>Total Due</th>
+              </tr>
+            </thead>
+            <tbody id="dueTableBody">
+              <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -63,7 +143,7 @@
   </button>
 
   <nav class="bottom-nav">
-    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="dashboard.html" class="b-nav-item active">📊 Home</a>
     <a href="flats.html" class="b-nav-item">🏢 Flats</a>
     <a href="tenants.html" class="b-nav-item">👥 Tenants</a>
     <a href="payments.html" class="b-nav-item">💵 Payments</a>
@@ -72,43 +152,143 @@
 
   <script src="app.js"></script>
   <script>
+    // গ্লোবাল চার্ট অপশন (মোবাইলে ছোট দেখানোর জন্য)
+    Chart.defaults.font.size = 9;
+    Chart.defaults.plugins.legend.labels.boxWidth = 10;
+    Chart.defaults.plugins.legend.labels.padding = 10;
+
     async function loadDashboard() {
       const data = await apiCall('getDashboardData');
       if (!data) return;
 
-      document.getElementById('kpi-total').textContent = data.totalFlats;
-      document.getElementById('kpi-occupied').textContent = data.occupied;
-      document.getElementById('kpi-vacant').textContent = data.vacant;
-      document.getElementById('kpi-collected').textContent = '৳ ' + data.collectedThisMonth.toLocaleString();
+      document.getElementById('kpi-total-flats').textContent = data.totalFlats;
+      document.getElementById('kpi-tenants').textContent = data.activeTenants;
+      document.getElementById('kpi-expected').textContent = '৳ ' + data.expectedMonthlyRent.toLocaleString();
+      document.getElementById('kpi-received').textContent = '৳ ' + data.currentMonthPaidAmount.toLocaleString();
+      document.getElementById('kpi-paid-tenants').textContent = data.completedTenants;
+      document.getElementById('kpi-overdue').textContent = '৳ ' + data.previousMonthsOverdue.toLocaleString();
 
-      // Render Chart
-      const ctx = document.getElementById('collectionChart').getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
+      // ১. Trend Chart
+      const ctx1 = document.getElementById('collectionChart').getContext('2d');
+      new Chart(ctx1, {
+        type: 'bar',
         data: {
           labels: data.chartData.labels,
-          datasets: [{
-            label: 'Collected Rent (৳)',
-            data: data.chartData.collections,
-            borderColor: '#0f766e',
-            backgroundColor: 'rgba(15, 118, 110, 0.1)',
-            borderWidth: 3,
-            tension: 0.4,
-            fill: true,
-            pointBackgroundColor: '#0f766e'
-          }]
+          datasets: [
+            {
+              label: 'Expected',
+              data: data.chartData.expected,
+              backgroundColor: 'rgba(15, 118, 110, 0.2)',
+              borderColor: '#0f766e',
+              borderWidth: 2,
+              type: 'line',
+              tension: 0.3
+            },
+            {
+              label: 'Received',
+              data: data.chartData.received,
+              backgroundColor: '#10b981',
+              borderRadius: 4
+            }
+          ]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } },
           scales: {
-            y: { beginAtZero: true, grid: { borderDash: [5, 5] } },
-            x: { grid: { display: false } }
+            y: { beginAtZero: true, ticks: { font: { size: 9 } } },
+            x: { ticks: { font: { size: 9 } } }
           }
         }
       });
+
+      // ২. Status Chart
+      const ctx2 = document.getElementById('statusChart').getContext('2d');
+      new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+          labels: ['Paid', 'Partial', 'Unpaid'],
+          datasets: [{
+            data: [data.completedTenants, data.partialTenants, data.unpaidTenants],
+            backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+            borderWidth: 0,
+            cutout: '65%'
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+
+      // ৩. Pending vs Completed Chart
+      const pendingData = data.chartData.expected.map((exp, i) => {
+        const rec = data.chartData.received[i];
+        return Math.max(0, exp - rec); 
+      });
+
+      const ctx3 = document.getElementById('pendingChart').getContext('2d');
+      new Chart(ctx3, {
+        type: 'bar',
+        data: {
+          labels: data.chartData.labels,
+          datasets: [
+            {
+              label: 'Completed',
+              data: data.chartData.received,
+              backgroundColor: '#10b981',
+              borderRadius: 4
+            },
+            {
+              label: 'Pending',
+              data: pendingData,
+              backgroundColor: '#f59e0b',
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: { 
+            legend: { position: 'bottom' },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': ৳ ' + context.raw.toLocaleString();
+                }
+              }
+            }
+          },
+          scales: {
+            x: { stacked: true, ticks: { font: { size: 9 } } },
+            y: { 
+              stacked: true, 
+              beginAtZero: true,
+              ticks: { font: { size: 9 }, callback: function(value) { return '৳ ' + value; } }
+            }
+          }
+        }
+      });
+
+      // ৪. Due Table
+      const tbody = document.getElementById('dueTableBody');
+      if (data.tenantDueList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--success);">No outstanding dues! Everyone is up to date.</td></tr>';
+      } else {
+        tbody.innerHTML = data.tenantDueList.map(t => `
+          <tr>
+            <td><strong>${t.name}</strong></td>
+            <td>${t.flatNumber}</td>
+            <td>৳ ${t.rent.toLocaleString()}</td>
+            <td>৳ ${t.currentMonthPaid.toLocaleString()}</td>
+            <td>৳ ${t.currentMonthDue.toLocaleString()}</td>
+            <td><span class="badge-due">৳ ${t.totalDue.toLocaleString()}</span></td>
+          </tr>
+        `).join('');
+      }
     }
+
     loadDashboard();
   </script>
 </body>

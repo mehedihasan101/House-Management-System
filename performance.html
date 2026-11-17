@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Performance - House Management</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .perf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .perf-table th, .perf-table td { padding: 12px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+    .perf-table th { background: var(--bg); color: var(--text-muted); font-weight: 600; }
+    .progress-bar { width: 100%; background: var(--border); border-radius: 10px; height: 8px; margin-top: 4px; }
+    .progress-fill { height: 8px; border-radius: 10px; background: var(--success); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">House Manage</div>
+    <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
+    <a href="flats.html" class="nav-item">🏢 All Flats</a>
+    <a href="tenants.html" class="nav-item">👥 Tenants</a>
+    <a href="payments.html" class="nav-item">💵 Rent Collection</a>
+    <a href="performance.html" class="nav-item active">📈 Performance</a>
+    <a href="reports.html" class="nav-item">📄 Reports</a>
+     <a href="expenses.html" class="nav-item">💸 Expenses</a>
+    <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
+  </aside>
+
+  <main class="main-content">
+    <div class="container">
+      <h1 class="page-title">Performance Analytics</h1>
+      
+      <div class="card" style="margin-bottom: 16px;">
+        <h3 style="font-size: 14px; margin-bottom: 12px;">Tenant-wise Collection Performance</h3>
+        <div class="scroll" style="overflow-x: auto;">
+          <table class="perf-table">
+            <thead>
+              <tr>
+                <th>Tenant (Flat)</th>
+                <th>Expected</th>
+                <th>Collected</th>
+                <th>Due</th>
+                <th style="width: 120px;">Rate</th>
+              </tr>
+            </thead>
+            <tbody id="perfTableBody">
+              <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="flats.html" class="b-nav-item">🏢 Flats</a>
+    <a href="tenants.html" class="b-nav-item">👥 Tenants</a>
+    <a href="payments.html" class="b-nav-item">💵 Payments</a>
+    <a href="more.html" class="b-nav-item active">☰ More</a>
+  </nav>
+
+  <script src="app.js"></script>
+  <script>
+    async function loadPerformance() {
+      const data = await apiCall('getPerformanceData');
+      const tbody = document.getElementById('perfTableBody');
+      
+      if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No data available.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.map(t => `
+        <tr>
+          <td><strong>${t.name}</strong><br><small style="color:var(--text-muted)">Flat ${t.flatNumber}</small></td>
+          <td>৳ ${t.expected.toLocaleString()}</td>
+          <td>৳ ${t.collected.toLocaleString()}</td>
+          <td style="color: var(--danger); font-weight: 600;">৳ ${t.due.toLocaleString()}</td>
+          <td>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600;">
+              <span>${t.rate}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${t.rate}%; background: ${t.rate > 80 ? 'var(--success)' : t.rate > 50 ? 'var(--warning)' : 'var(--danger)'};"></div>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+    loadPerformance();
+  </script>
+</body>
+</html>

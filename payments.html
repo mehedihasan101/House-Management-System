@@ -6,31 +6,61 @@
   <title>Rent Collection - House Management</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    .pay-list { display: flex; flex-direction: column; gap: 10px; }
-    
+    /* ফিল্টার সেকশন ডিজাইন */
+    .filter-card { 
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; 
+    }
+    .filter-card input, .filter-card select, .filter-card button {
+      height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; outline: none; background: var(--bg); color: var(--text-main); transition: 0.2s;
+    }
+    .filter-card input:focus, .filter-card select:focus { border-color: var(--primary); }
+    .filter-card button { background: var(--surface); cursor: pointer; font-weight: 600; white-space: nowrap; }
+
+    /* ডেস্কটপ লেআউট (এক লাইন) */
+    @media (min-width: 769px) {
+      .filter-card { flex-wrap: nowrap; }
+      .filter-card input[type="text"] { flex: 2; min-width: 200px; }
+      .filter-row { display: contents; } 
+      .filter-card input[type="month"], .filter-card select { flex: 1; min-width: 110px; }
+      .filter-card button { flex: 0 0 auto; }
+    }
+
+    /* মোবাইল লেআউট (দুই লাইন) */
+    @media (max-width: 768px) {
+      .filter-card input[type="text"] { flex: 1 1 100%; }
+      .filter-row { display: flex; flex-wrap: wrap; width: 100%; gap: 8px; }
+      .filter-row input[type="month"], .filter-row select { flex: 1 1 calc(50% - 4px); min-width: 0; }
+      .filter-row button { flex: 1 1 100%; margin-top: 4px; }
+    }
+
     /* পেমেন্ট কার্ড ডিজাইন */
+    .pay-list { display: flex; flex-direction: column; gap: 10px; }
     .pay-card { 
-      background: var(--surface); 
-      border: 1px solid var(--border); 
-      border-radius: var(--radius); 
-      padding: 14px; 
-      display: flex; 
-      justify-content: space-between; 
-      align-items: center; 
-      cursor: pointer;
-      transition: 0.2s;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; 
+      display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s;
     }
     .pay-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    
+    /* ✨ Inactive ভাড়াটিয়ার কার্ড লাল রঙের */
+    .pay-card.inactive { 
+      background-color: #fef2f2; 
+      border-color: #fca5a5; 
+    }
+    .pay-card.inactive:hover { border-color: #ef4444; }
+
     .pay-info h4 { margin: 0 0 4px 0; font-size: 15px; }
     .pay-info p { margin: 0; font-size: 12px; color: var(--text-muted); }
     
     /* টাকা এবং ব্যাজ ডিজাইন */
     .pay-amount-wrapper { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
     .pay-amount { font-size: 16px; font-weight: 700; color: var(--success); }
-    .badge-container { display: flex; gap: 4px; }
+    .badge-container { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
     
+    /* কালারফুল ব্যাজ সমূহ */
     .month-badge { background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
     .from-badge { background: #f3e8ff; color: #7e22ce; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; display: flex; align-items: center; gap: 3px; }
+    .badge-ongoing { background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; }
+    .badge-inactive { background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; }
 
     /* মডাল CSS */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
@@ -54,6 +84,9 @@
     <a href="flats.html" class="nav-item">🏢 All Flats</a>
     <a href="tenants.html" class="nav-item">👥 Tenants</a>
     <a href="payments.html" class="nav-item active">💵 Rent Collection</a>
+    <a href="expenses.html" class="nav-item">💸 Expenses</a>
+    <a href="performance.html" class="nav-item">📈 Performance</a>
+    <a href="reports.html" class="nav-item">📄 Reports</a>
     <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
   </aside>
 
@@ -63,6 +96,29 @@
         <h1 class="page-title" style="margin: 0;">Payments</h1>
         <button class="btn btn-primary" onclick="openModal()">+ Collect Rent</button>
       </div>
+
+      <!-- ফিল্টার সেকশন -->
+      <div class="filter-card">
+        <input type="text" id="f-search" placeholder="🔍 Search by Tenant or Flat...">
+        
+        <div class="filter-row">
+          <!-- ✨ নতুন ফ্ল্যাট ফিল্টার ড্রপডাউন -->
+          <select id="f-flat">
+            <option value="All">All Flats</option>
+          </select>
+          
+          <input type="month" id="f-from" title="From Month">
+          <input type="month" id="f-to" title="To Month">
+          <select id="f-status">
+            <option value="All">All Status</option>
+            <option value="Paid">Paid</option>
+            <option value="Partial">Partial</option>
+            <option value="Due">Due</option>
+          </select>
+          <button id="f-reset">Reset</button>
+        </div>
+      </div>
+
       <div class="pay-list" id="paymentContainer">
         <div class="empty">Loading payments...</div>
       </div>
@@ -131,9 +187,7 @@
         <h2>Payment Details</h2>
         <button class="close-btn" onclick="closeDetailsModal()">×</button>
       </div>
-      <div id="detailsContent">
-        <!-- Details will be injected here -->
-      </div>
+      <div id="detailsContent"></div>
     </div>
   </div>
 
@@ -148,96 +202,131 @@
   <script src="app.js"></script>
   <script>
     let activeTenants = [];
-    let allPayments = []; // ডিটেইলস দেখানোর জন্য ডেটা স্টোর করব
+    let allPayments = [];
+    let allTenantsData = [];
+    let allFlatsData = [];
 
-    // নির্ভুলভাবে মাস বের করার ফাংশন (Timezone বাগ ফিক্স)
+    // তারিখ থেকে শুধু মাস বের করার ফাংশন (2026-10 -> Oct 2026)
     function formatMonth(monthStr) {
       if(!monthStr) return 'N/A';
-      // যদি ডেটা "2026-10" বা "2026-10-01T..." হয়, তবে প্রথম ৭ অক্ষর নিবে (2026-10)
       const match = String(monthStr).match(/^(\d{4})-(\d{2})/);
       if (!match) return monthStr;
-      const year = parseInt(match[1], 10);
-      const month = parseInt(match[2], 10) - 1; // জাভাস্ক্রিপ্টে মাস ০ থেকে শুরু
-      const date = new Date(year, month, 1);
-      return date.toLocaleString('en-US', { month: 'short', year: 'numeric' }); // যেমন: Oct 2026
+      
+      const year = match[1];
+      const monthIndex = parseInt(match[2], 10) - 1;
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      
+      return monthNames[monthIndex] + ' ' + year;
     }
 
     async function loadPayments() {
-      allPayments = await apiCall('getPayments');
+      // পেমেন্টের সাথে টেন্যান্ট স্ট্যাটাস এবং ফ্ল্যাট লিস্ট আনা হচ্ছে
+      const [payments, tenants, flats] = await Promise.all([
+        apiCall('getPayments'),
+        apiCall('getTenants'),
+        apiCall('getFlats')
+      ]);
+
+      allPayments = Array.isArray(payments) ? payments : [];
+      allTenantsData = Array.isArray(tenants) ? tenants : [];
+      allFlatsData = Array.isArray(flats) ? flats : [];
+
+      // ফ্ল্যাট ফিল্টার ড্রপডাউনে ডেটা পপুলেট করা (101, 102 সর্ট করে)
+      const flatFilter = document.getElementById('f-flat');
+      allFlatsData.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
+      flatFilter.innerHTML = '<option value="All">All Flats</option>' + 
+        allFlatsData.map(f => `<option value="${f.flatNumber}">Flat ${f.flatNumber}</option>`).join('');
+
+      // প্রতিটি পেমেন্টের সাথে টেন্যান্টের স্ট্যাটাস (Active/Inactive) মিলিয়ে নেওয়া
+      allPayments = allPayments.map(p => {
+        const t = allTenantsData.find(t => t.name === p.tenantName && String(t.flatNumber) === String(p.flatNumber));
+        return {
+          ...p,
+          tenantStatus: t ? t.status : 'Inactive',
+          moveOutDate: t ? t.moveOut : null
+        };
+      });
+
+      renderPayments();
+    }
+
+    function renderPayments() {
+      const search = document.getElementById('f-search').value.trim().toLowerCase();
+      const flatFilter = document.getElementById('f-flat').value;
+      const fromM = document.getElementById('f-from').value;
+      const toM = document.getElementById('f-to').value;
+      const status = document.getElementById('f-status').value;
+
+      const filtered = allPayments.filter(p => {
+        const nameMatch = (p.tenantName || '').toLowerCase().includes(search);
+        const flatMatch = String(p.flatNumber || '').toLowerCase().includes(search);
+        const matchSearch = nameMatch || flatMatch;
+
+        const matchFlat = flatFilter === 'All' || String(p.flatNumber) === flatFilter;
+
+        let pMonth = "";
+        const m = String(p.rentMonth || "").match(/^(\d{4}-\d{2})/);
+        if (m) pMonth = m[1];
+
+        const matchFrom = !fromM || pMonth >= fromM;
+        const matchTo = !toM || pMonth <= toM;
+        const matchStatus = status === 'All' || (p.status || '').toLowerCase() === status.toLowerCase();
+
+        return matchSearch && matchFlat && matchFrom && matchTo && matchStatus;
+      });
+
       const container = document.getElementById('paymentContainer');
-      
-      if (!allPayments || allPayments.length === 0) {
-        container.innerHTML = '<div class="empty">No payments recorded yet.</div>';
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty">No payments match your filters.</div>';
         return;
       }
 
-      container.innerHTML = allPayments.map((p, index) => `
-        <div class="pay-card" onclick="showDetails(${index})">
+      container.innerHTML = filtered.map(p => {
+        // ✨ Active না হলে Inactive ক্লাস এবং লাল কালার অ্যাড হবে
+        const isInactive = p.tenantStatus !== 'Active';
+        const cardClass = isInactive ? 'pay-card inactive' : 'pay-card';
+        
+        const statusBadge = isInactive 
+          ? `<span class="badge-inactive">Inactive ${p.moveOutDate ? '(Out: '+formatMonth(p.moveOutDate)+')' : ''}</span>`
+          : `<span class="badge-ongoing">Ongoing</span>`;
+
+        return `
+        <div class="${cardClass}" onclick="showDetails('${p.paymentId}')">
           <div class="pay-info">
             <h4>${p.tenantName} (Flat ${p.flatNumber})</h4>
             <p>Method: ${p.method} | Date: ${p.date}</p>
           </div>
           <div class="pay-amount-wrapper">
-            <div class="pay-amount">৳ ${p.amount}</div>
+            <div class="pay-amount" style="${isInactive ? 'color:#b91c1c;' : ''}">৳ ${p.amount}</div>
             <div class="badge-container">
               <span class="month-badge">${formatMonth(p.rentMonth)}</span>
-              <span class="from-badge">👤 ${p.receivedFrom}</span>
+              ${statusBadge}
+              <span class="from-badge">👤 ${p.receivedFrom || 'N/A'}</span>
             </div>
           </div>
         </div>
-      `).join('');
+      `}).join('');
     }
 
-    // ক্লিক করলে ডিটেইলস মডাল দেখানোর ফাংশন
-    function showDetails(index) {
-      const p = allPayments[index];
+    function showDetails(paymentId) {
+      const p = allPayments.find(x => x.paymentId === paymentId);
+      if (!p) return;
+      
+      const isInactive = p.tenantStatus !== 'Active';
       const content = document.getElementById('detailsContent');
       
       content.innerHTML = `
-        <div class="detail-row">
-          <span class="detail-label">Payment ID</span>
-          <span class="detail-value">${p.paymentId}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Tenant Name</span>
-          <span class="detail-value">${p.tenantName}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Flat</span>
-          <span class="detail-value">${p.flatNumber} (${p.flatName})</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Rent Month</span>
-          <span class="detail-value" style="color: #0369a1;">${formatMonth(p.rentMonth)}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Amount</span>
-          <span class="detail-value" style="color: var(--success); font-size: 16px;">৳ ${p.amount}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Payment Date</span>
-          <span class="detail-value">${p.date}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Method</span>
-          <span class="detail-value">${p.method}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Transaction ID</span>
-          <span class="detail-value">${p.trxId !== 'N/A' ? p.trxId : '—'}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Received From</span>
-          <span class="detail-value">${p.receivedFrom}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Received By</span>
-          <span class="detail-value">${p.receivedBy}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Status</span>
-          <span class="detail-value" style="color: var(--success);">${p.status}</span>
-        </div>
+        <div class="detail-row"><span class="detail-label">Payment ID</span><span class="detail-value">${p.paymentId}</span></div>
+        <div class="detail-row"><span class="detail-label">Tenant Name</span><span class="detail-value">${p.tenantName} ${isInactive ? '<span style="color:red;font-size:12px;">(Inactive)</span>' : ''}</span></div>
+        <div class="detail-row"><span class="detail-label">Flat</span><span class="detail-value">${p.flatNumber} (${p.flatName || 'N/A'})</span></div>
+        <div class="detail-row"><span class="detail-label">Rent Month</span><span class="detail-value" style="color: #0369a1;">${formatMonth(p.rentMonth)}</span></div>
+        <div class="detail-row"><span class="detail-label">Amount</span><span class="detail-value" style="color: var(--success); font-size: 16px;">৳ ${p.amount}</span></div>
+        <div class="detail-row"><span class="detail-label">Payment Date</span><span class="detail-value">${p.date}</span></div>
+        <div class="detail-row"><span class="detail-label">Method</span><span class="detail-value">${p.method}</span></div>
+        <div class="detail-row"><span class="detail-label">Transaction ID</span><span class="detail-value">${p.trxId && p.trxId !== 'N/A' ? p.trxId : '—'}</span></div>
+        <div class="detail-row"><span class="detail-label">Received From</span><span class="detail-value">${p.receivedFrom || 'N/A'}</span></div>
+        <div class="detail-row"><span class="detail-label">Received By</span><span class="detail-value">${p.receivedBy || 'Admin'}</span></div>
+        <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value" style="color: var(--success);">${p.status}</span></div>
       `;
       
       document.getElementById('detailsModal').classList.add('active');
@@ -255,6 +344,8 @@
         select.innerHTML = '<option value="">No active tenants</option>';
         return;
       }
+      // টেন্যান্ট ড্রপডাউনে ফ্ল্যাট নাম্বার অনুযায়ী সর্ট করা হলো
+      activeTenants.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
       select.innerHTML = '<option value="">Select Tenant</option>' + 
         activeTenants.map(t => `<option value="${t.tenantId}">${t.flatNumber} - ${t.name}</option>`).join('');
     }
@@ -283,6 +374,11 @@
 
       const select = document.getElementById('tenantSelect');
       const tenant = activeTenants.find(t => t.tenantId === select.value);
+      if(!tenant) {
+        alert("Please select a valid tenant.");
+        btn.textContent = 'Save Payment'; btn.disabled = false;
+        return;
+      }
 
       const payData = {
         flatNumber: tenant.flatNumber,
@@ -304,11 +400,26 @@
       if (res) {
         alert('Payment saved successfully!');
         closeModal();
-        loadPayments(); // লিস্ট রিফ্রেশ
+        loadPayments();
       }
     });
 
-    // পেজ লোড হলে ডেটা নিয়ে আসা
+    // ফিল্টার ইভেন্ট লিসেনার
+    document.getElementById('f-search').addEventListener('input', renderPayments);
+    document.getElementById('f-flat').addEventListener('change', renderPayments);
+    document.getElementById('f-from').addEventListener('change', renderPayments);
+    document.getElementById('f-to').addEventListener('change', renderPayments);
+    document.getElementById('f-status').addEventListener('change', renderPayments);
+    
+    document.getElementById('f-reset').addEventListener('click', () => {
+      document.getElementById('f-search').value = '';
+      document.getElementById('f-flat').value = 'All';
+      document.getElementById('f-from').value = '';
+      document.getElementById('f-to').value = '';
+      document.getElementById('f-status').value = 'All';
+      renderPayments();
+    });
+
     loadPayments();
   </script>
 </body>

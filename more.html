@@ -5,6 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>More Options - House Management</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* মেনু আইটেমের ডিজাইন */
+    .menu-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .menu-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-decoration: none;
+      color: var(--text-main);
+      transition: 0.2s;
+    }
+    .menu-item:hover {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+    .menu-title {
+      font-weight: 600;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .menu-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .menu-arrow {
+      color: var(--text-muted);
+      font-size: 18px;
+    }
+  </style>
 </head>
 <body>
   <aside class="sidebar">
@@ -13,24 +53,58 @@
     <a href="flats.html" class="nav-item">🏢 All Flats</a>
     <a href="tenants.html" class="nav-item">👥 Tenants</a>
     <a href="payments.html" class="nav-item">💵 Rent Collection</a>
+    <a href="performance.html" class="nav-item">📈 Performance</a>
+    <a href="reports.html" class="nav-item">📄 Reports</a>
+     <a href="expenses.html" class="nav-item">💸 Expenses</a>
     <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
   </aside>
 
   <main class="main-content">
     <div class="container">
       <h1 class="page-title">More Options</h1>
-      <div class="card">
-        <div class="list-item" style="cursor: pointer;" onclick="window.location.href='dashboard.html'">
-          <div class="list-title">📈 Performance & Analytics</div>
-          <div class="list-desc">Coming soon</div>
-        </div>
-        <div class="list-item" style="cursor: pointer;" onclick="window.location.href='dashboard.html'">
-          <div class="list-title">📄 Reports</div>
-          <div class="list-desc">Download income & expense reports</div>
-        </div>
-        <div class="list-item" style="cursor: pointer;" onclick="logout()">
-          <div class="list-title" style="color: var(--danger);">🚪 Logout</div>
-          <div class="list-desc">Sign out from the system</div>
+      
+      <div class="menu-list">
+
+
+                <!-- ✨ নতুন Expenses লিংক -->
+        <a href="expenses.html" class="menu-item">
+          <div>
+            <div class="menu-title">💸 Expenses</div>
+            <div class="menu-desc">Track building bills & costs</div>
+          </div>
+          <div class="menu-arrow">›</div>
+        </a>
+
+        
+        <!-- Performance Link -->
+        <a href="performance.html" class="menu-item">
+          <div>
+            <div class="menu-title">📈 Performance Analytics</div>
+            <div class="menu-desc">View collection rates and tenant stats</div>
+          </div>
+          <div class="menu-arrow">›</div>
+        </a>
+
+        <!-- Reports Link -->
+        <a href="reports.html" class="menu-item">
+          <div>
+            <div class="menu-title">📄 Reports</div>
+            <div class="menu-desc">Download financial reports (CSV)</div>
+          </div>
+          <div class="menu-arrow">›</div>
+        </a>
+
+        
+
+
+
+        <!-- Logout Button -->
+        <div class="menu-item" style="cursor: pointer;" onclick="logout()">
+          <div>
+            <div class="menu-title" style="color: var(--danger);">🚪 Logout</div>
+            <div class="menu-desc">Sign out from the system safely</div>
+          </div>
+          <div class="menu-arrow" style="color: var(--danger);">›</div>
         </div>
       </div>
     </div>
