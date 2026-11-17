@@ -43,11 +43,12 @@
     <div class="brand">House Manage</div>
     <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
     <a href="flats.html" class="nav-item">🏢 All Flats</a>
-    <a href="tenants.html" class="nav-item">👥 Tenants</a>
+    <a href="tenants.html" class="nav-item active">👥 Tenants</a>
     <a href="payments.html" class="nav-item">💵 Rent Collection</a>
     <a href="performance.html" class="nav-item">📈 Performance</a>
     <a href="reports.html" class="nav-item">📄 Reports</a>
-     <a href="expenses.html" class="nav-item">💸 Expenses</a>
+    <a href="expenses.html" class="nav-item">💸 Expenses</a>
+    <a href="reset-password.html" class="nav-item">🔐 Reset Password</a>
     <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
   </aside>
 
@@ -58,7 +59,6 @@
         <button class="btn btn-primary" onclick="openModal()">+ Add Tenant</button>
       </div>
 
-      <!-- Search & Filter Bar (এখানে oninput/onchange সরিয়ে দেওয়া হয়েছে) -->
       <div class="filter-bar">
         <input type="text" id="searchInput" placeholder="🔍 Search by Name, Flat Number...">
         <select id="statusFilter">
@@ -150,7 +150,7 @@
 
   <nav class="bottom-nav">
     <a href="dashboard.html" class="b-nav-item">📊 Home</a>
-    <a href="flats.html" class="b-nav-item">🏢 Flats</a>
+    <a href="reports.html" class="b-nav-item">📄 Reports</a>
     <a href="tenants.html" class="b-nav-item active">👥 Tenants</a>
     <a href="payments.html" class="b-nav-item">💵 Payments</a>
     <a href="more.html" class="b-nav-item">☰ More</a>
@@ -162,7 +162,6 @@
     let allTenantsData = [];
     let currentMoveOutId = null;
 
-    // ডেট ফরম্যাট ফাংশন
     function formatMonthYear(dateStr) {
       if (!dateStr) return '';
       const d = new Date(dateStr);
@@ -170,20 +169,16 @@
       return d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     }
 
-    // ডেটা লোড
     async function loadData() {
       const data = await apiCall('getTenants');
-      // ডেটা না আসলে খালি অ্যারে সেট হবে যাতে সার্চে এরর না করে
       allTenantsData = Array.isArray(data) ? data : []; 
       renderTenants();
     }
 
-    // UI রেন্ডার এবং সার্চ ফিল্টারিং
     function renderTenants() {
       const searchText = document.getElementById('searchInput').value.trim().toLowerCase();
       const statusFilter = document.getElementById('statusFilter').value;
 
-      // সার্চ ও স্ট্যাটাস ফিল্টার লজিক
       const filteredData = allTenantsData.filter(t => {
         const nameMatch = (t.name || '').toLowerCase().includes(searchText);
         const flatMatch = (String(t.flatNumber) || '').toLowerCase().includes(searchText);
@@ -198,7 +193,11 @@
       const activeTenants = filteredData.filter(t => t.status === 'Active');
       const inactiveTenants = filteredData.filter(t => t.status !== 'Active');
 
-      // ফিল্টার অনুযায়ী সেকশন দেখানো/লুকানো
+      // ✨ এখানে ফ্ল্যাট নাম্বার অনুযায়ী অ্যাসেন্ডিং (Accending) সর্ট করা হচ্ছে
+      const sortByFlat = (a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true });
+      activeTenants.sort(sortByFlat);
+      inactiveTenants.sort(sortByFlat);
+
       document.getElementById('activeSection').style.display = (statusFilter === 'Inactive') ? 'none' : 'block';
       document.getElementById('inactiveSection').style.display = (statusFilter === 'Active') ? 'none' : 'block';
 
@@ -251,6 +250,9 @@
       const select = document.getElementById('flatSelect');
       const hint = document.getElementById('flatHint');
       
+      // ✨ ফ্ল্যাটগুলোও সর্ট করে নেওয়া হলো
+      allFlats.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
+      
       let availableFlats = allFlats.filter(f => f.status === 'Vacant' || f.flatNumber === currentFlat);
       
       if (availableFlats.length === 0 && !currentFlat) {
@@ -270,7 +272,6 @@
       document.getElementById('editTenantId').value = '';
       document.getElementById('flatSelect').disabled = false;
       
-      // Add করার সময় Move-in Date দেখাবে
       document.getElementById('moveInGroup').style.display = 'block';
       document.getElementById('tMoveIn').setAttribute('required', 'true');
       document.getElementById('tMoveIn').value = new Date().toISOString().slice(0, 10);
@@ -292,7 +293,6 @@
       document.getElementById('tRent').value = t.rent;
       document.getElementById('tAdvance').value = t.advance;
       
-      // Edit করার সময় Move-in Date লুকানো থাকবে
       document.getElementById('moveInGroup').style.display = 'none';
       document.getElementById('tMoveIn').removeAttribute('required');
       document.getElementById('tMoveIn').value = t.moveIn;
@@ -348,7 +348,6 @@
       }
     });
 
-    // Move Out Modal Logic
     function openMoveOutModal(tenantId) {
       const t = allTenantsData.find(x => x.tenantId === tenantId);
       if (!t) return;
@@ -401,13 +400,9 @@
       }
     }
 
-    // ==========================================
-    // ⚠️ এখানে ইভেন্ট লিসেনার যুক্ত করা হয়েছে
-    // ==========================================
     document.getElementById('searchInput').addEventListener('input', renderTenants);
     document.getElementById('statusFilter').addEventListener('change', renderTenants);
 
-    // পেজ লোড হলে ডেটা নিয়ে আসা
     loadData();
   </script>
 </body>
