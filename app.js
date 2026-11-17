@@ -2,8 +2,8 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzOoTjEpl-YYAplvHjletDB
 
 const session = JSON.parse(localStorage.getItem('hm_session'));
 
-if (!session && !window.location.pathname.includes('login.html')) {
-  window.location.href = 'login.html';
+if (!session && !window.location.pathname.includes('index.html')) {
+  window.location.href = 'index.html';
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function logout() {
   localStorage.removeItem('hm_session');
-  window.location.href = 'login.html';
+  window.location.href = 'index.html';
 }
 
 async function apiCall(action, payload = {}) {
