@@ -30,10 +30,16 @@
     .chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
     @media(min-width: 900px) { .chart-grid { grid-template-columns: 2fr 1fr; } }
 
+    /* Due Table রেসপন্সিভ স্টাইল */
     .due-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .due-table th, .due-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); }
-    .due-table th { background: var(--bg); color: var(--text-muted); font-weight: 600; }
+    .due-table th, .due-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .due-table th { background: var(--bg); color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
     .due-table td { color: var(--text-main); }
+    
+    @media (max-width: 600px) {
+      .due-table th, .due-table td { padding: 6px 4px; font-size: 11px; }
+    }
+
     .badge-due { background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; }
   </style>
 </head>
@@ -41,13 +47,13 @@
 
   <aside class="sidebar">
     <div class="brand">House Manage</div>
-    <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
+    <a href="dashboard.html" class="nav-item active">📊 Dashboard</a>
     <a href="flats.html" class="nav-item">🏢 All Flats</a>
     <a href="tenants.html" class="nav-item">👥 Tenants</a>
     <a href="payments.html" class="nav-item">💵 Rent Collection</a>
     <a href="performance.html" class="nav-item">📈 Performance</a>
     <a href="reports.html" class="nav-item">📄 Reports</a>
-     <a href="expenses.html" class="nav-item">💸 Expenses</a>
+    <a href="expenses.html" class="nav-item">💸 Expenses</a>
     <a href="reset-password.html" class="nav-item">🔐 Reset Password</a>
     <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
   </aside>
@@ -124,13 +130,14 @@
                 <th>Tenant</th>
                 <th>Flat</th>
                 <th>Rent</th>
-                <th>Paid</th>
-                <th>Due</th>
+                <!-- Paid কলাম বাদ দেওয়া হয়েছে -->
+                <th>Current Due</th> <!-- Due থেকে পরিবর্তন করা হয়েছে -->
                 <th>Total Due</th>
               </tr>
             </thead>
             <tbody id="dueTableBody">
-              <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
+              <!-- colspan 6 থেকে 5 করা হয়েছে -->
+              <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -144,10 +151,10 @@
   </button>
 
   <nav class="bottom-nav">
-    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="dashboard.html" class="b-nav-item active">📊 Home</a>
     <a href="reports.html" class="b-nav-item">📄 Reports</a>
-    <a href="tenants.html" class="b-nav-item">👥 Tenants</a>
     <a href="payments.html" class="b-nav-item">💵 Payments</a>
+    <a href="expenses.html" class="b-nav-item">💸 Expenses</a>
     <a href="more.html" class="b-nav-item">☰ More</a>
   </nav>
 
@@ -272,17 +279,16 @@
         }
       });
 
-      // ৪. Due Table
+      // ৪. Due Table (Paid কলাম বাদ দেওয়া হয়েছে)
       const tbody = document.getElementById('dueTableBody');
       if (data.tenantDueList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--success);">No outstanding dues! Everyone is up to date.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--success);">No outstanding dues! Everyone is up to date.</td></tr>';
       } else {
         tbody.innerHTML = data.tenantDueList.map(t => `
           <tr>
             <td><strong>${t.name}</strong></td>
             <td>${t.flatNumber}</td>
             <td>৳ ${t.rent.toLocaleString()}</td>
-            <td>৳ ${t.currentMonthPaid.toLocaleString()}</td>
             <td>৳ ${t.currentMonthDue.toLocaleString()}</td>
             <td><span class="badge-due">৳ ${t.totalDue.toLocaleString()}</span></td>
           </tr>

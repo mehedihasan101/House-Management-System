@@ -7,14 +7,76 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    /* ✨ লোডিং অ্যানিমেশন স্টাইল */
+    .loader-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(243, 246, 250, 0.9); /* হালকা ব্যাকগ্রাউন্ড */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      transition: opacity 0.3s ease;
+    }
+    .loader-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .spinner {
+      border: 4px solid var(--border);
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .loader-text {
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+    }
+
+    /* টেবিল স্টাইল */
     .perf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .perf-table th, .perf-table td { padding: 12px 8px; border-bottom: 1px solid var(--border); text-align: left; }
     .perf-table th { background: var(--bg); color: var(--text-muted); font-weight: 600; }
+    
+    .perf-row { cursor: pointer; transition: background 0.2s; }
+    .perf-row:hover { background: var(--bg); }
+    .perf-row.inactive { background: #fef2f2; }
+    .perf-row.inactive:hover { background: #fee2e2; }
+
     .progress-bar { width: 100%; background: var(--border); border-radius: 10px; height: 8px; margin-top: 4px; }
     .progress-fill { height: 8px; border-radius: 10px; background: var(--success); }
+
+    /* মডাল স্টাইল */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--surface); width: 100%; max-width: 450px; border-radius: var(--radius); padding: 20px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    .modal-header h2 { margin: 0; font-size: 18px; color: var(--primary); }
+    .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+    
+    .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 14px; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: var(--text-muted); font-weight: 500; }
+    .detail-value { font-weight: 600; text-align: right; }
   </style>
 </head>
 <body>
+  <!-- ✨ লোডার (শুরুতে দেখাবে) -->
+  <div id="pageLoader" class="loader-overlay">
+    <div class="spinner"></div>
+    <div class="loader-text">Loading Performance Data...</div>
+  </div>
+
   <aside class="sidebar">
     <div class="brand">House Manage</div>
     <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
@@ -33,7 +95,10 @@
       <h1 class="page-title">Performance Analytics</h1>
       
       <div class="card" style="margin-bottom: 16px;">
-        <h3 style="font-size: 14px; margin-bottom: 12px;">Tenant-wise Collection Performance</h3>
+        <h3 style="font-size: 14px; margin-bottom: 12px; display: flex; justify-content: space-between;">
+          <span>Tenant-wise Collection Performance</span>
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">Click any row for details</span>
+        </h3>
         <div class="scroll" style="overflow-x: auto;">
           <table class="perf-table">
             <thead>
@@ -46,7 +111,7 @@
               </tr>
             </thead>
             <tbody id="perfTableBody">
-              <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+              <!-- ডেটা এখানে লোড হবে -->
             </tbody>
           </table>
         </div>
@@ -54,18 +119,39 @@
     </div>
   </main>
 
+  <!-- Tenant Details Modal -->
+  <div class="modal-overlay" id="tenantModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Tenant Details</h2>
+        <button class="close-btn" onclick="closeModal()">×</button>
+      </div>
+      <div id="modalContent">
+        <!-- Details injected here -->
+      </div>
+    </div>
+  </div>
+
   <nav class="bottom-nav">
     <a href="dashboard.html" class="b-nav-item">📊 Home</a>
     <a href="reports.html" class="b-nav-item">📄 Reports</a>
-    <a href="tenants.html" class="b-nav-item">👥 Tenants</a>
     <a href="payments.html" class="b-nav-item">💵 Payments</a>
-    <a href="more.html" class="b-nav-item active">☰ More</a>
+    <a href="performance.html" class="b-nav-item active">📈 Performance</a>
   </nav>
 
   <script src="app.js"></script>
   <script>
+    let allPerfData = [];
+
+    // পেজ লোড হলে ডেটা আনা এবং লোডার হাইড করা
     async function loadPerformance() {
       const data = await apiCall('getPerformanceData');
+      
+      // লোডারটি স্মুথলি হাইড করা
+      setTimeout(() => {
+        document.getElementById('pageLoader').classList.add('hidden');
+      }, 300);
+
       const tbody = document.getElementById('perfTableBody');
       
       if (!data || data.length === 0) {
@@ -73,12 +159,28 @@
         return;
       }
 
-      tbody.innerHTML = data.map(t => `
-        <tr>
-          <td><strong>${t.name}</strong><br><small style="color:var(--text-muted)">Flat ${t.flatNumber}</small></td>
+      // ✨ সর্টিং লজিক: প্রথমে Active (Flat Ascending), তারপর Inactive
+      data.sort((a, b) => {
+        if (a.status === 'Active' && b.status !== 'Active') return -1;
+        if (a.status !== 'Active' && b.status === 'Active') return 1;
+        return String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true });
+      });
+
+      allPerfData = data; // মডালে দেখানোর জন্য সেভ করা হলো
+
+      tbody.innerHTML = data.map((t, index) => {
+        const isInactive = t.status !== 'Active';
+        
+        return `
+        <tr class="perf-row ${isInactive ? 'inactive' : ''}" onclick="openModal(${index})">
+          <td>
+            <strong>${t.name}</strong><br>
+            <small style="color:var(--text-muted)">Flat ${t.flatNumber} (${t.flatName})</small>
+            ${isInactive ? '<span style="color:#ef4444; font-size:10px; margin-left:5px; font-weight:bold;">(Inactive)</span>' : '<span style="color:#10b981; font-size:10px; margin-left:5px; font-weight:bold;">(Active)</span>'}
+          </td>
           <td>৳ ${t.expected.toLocaleString()}</td>
           <td>৳ ${t.collected.toLocaleString()}</td>
-          <td style="color: var(--danger); font-weight: 600;">৳ ${t.due.toLocaleString()}</td>
+          <td style="color: ${t.due > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight: 600;">৳ ${t.due.toLocaleString()}</td>
           <td>
             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600;">
               <span>${t.rate}%</span>
@@ -88,8 +190,72 @@
             </div>
           </td>
         </tr>
-      `).join('');
+      `}).join('');
     }
+
+    // মডাল ওপেন ও কন্টেন্ট পপুলেট করা
+    function openModal(index) {
+      const t = allPerfData[index];
+      if (!t) return;
+
+      const isActive = t.status === 'Active';
+      
+      document.getElementById('modalContent').innerHTML = `
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="detail-value" style="color: ${isActive ? 'var(--success)' : 'var(--danger)'};">${t.status}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Name</span>
+          <span class="detail-value">${t.name}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Flat</span>
+          <span class="detail-value">${t.flatNumber} (${t.flatName})</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Phone</span>
+          <span class="detail-value">${t.phone || 'N/A'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Move In</span>
+          <span class="detail-value">${t.moveIn}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Move Out</span>
+          <span class="detail-value">${t.moveOut}</span>
+        </div>
+        <div class="detail-row" style="margin-top: 10px; background: var(--bg); padding: 10px; border-radius: 8px; border: none;">
+          <span class="detail-label">Expected Total</span>
+          <span class="detail-value">৳ ${t.expected.toLocaleString()}</span>
+        </div>
+        <div class="detail-row" style="background: var(--bg); padding: 10px; border-radius: 8px; border: none; margin-top: 5px;">
+          <span class="detail-label">Total Collected</span>
+          <span class="detail-value" style="color: var(--success);">৳ ${t.collected.toLocaleString()}</span>
+        </div>
+        <div class="detail-row" style="background: var(--bg); padding: 10px; border-radius: 8px; border: none; margin-top: 5px;">
+          <span class="detail-label">Total Due</span>
+          <span class="detail-value" style="color: ${t.due > 0 ? 'var(--danger)' : 'var(--success)'};">৳ ${t.due.toLocaleString()}</span>
+        </div>
+        <div class="detail-row" style="background: var(--bg); padding: 10px; border-radius: 8px; border: none; margin-top: 5px;">
+          <span class="detail-label">Collection Rate</span>
+          <span class="detail-value">${t.rate}%</span>
+        </div>
+      `;
+      
+      document.getElementById('tenantModal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('tenantModal').classList.remove('active');
+    }
+
+    // মডালের বাইরে ক্লিক করলে বন্ধ হবে
+    document.getElementById('tenantModal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    // পেজ লোড
     loadPerformance();
   </script>
 </body>
