@@ -36,6 +36,7 @@
     tr.summary-row td { background-color: #f0fdf4 !important; font-weight: bold; color: #166534; }
     td.month-col { color: #0369a1; background-color: #e0f2fe; font-weight: 600; text-align: center; border-radius: 4px; white-space: nowrap; }
     td.amount-col { color: #10b981; font-weight: 700; }
+    td.due-col { color: #ef4444; font-weight: 700; }
 
     /* ✨ Flat History এর জন্য নতুন ব্লক ডিজাইন */
     .tenant-report-block {
@@ -116,6 +117,10 @@
         </div>
 
         <div id="filter-monthly" class="control-row hidden">
+          <select id="monthlyView" title="View Type">
+            <option value="tenant" selected>👤 Tenant Wise</option>
+            <option value="month">📅 Month Wise</option>
+          </select>
           <input type="month" id="f-from-month" title="From Month">
           <input type="month" id="f-to-month" title="To Month">
         </div>
@@ -259,6 +264,7 @@
 
         const from = document.getElementById('f-from-month').value;
         const to = document.getElementById('f-to-month').value;
+        const view = document.getElementById('monthlyView').value;
         
         // ✨ ডাইনামিক টাইটেল রেঞ্জ
         let titleRange = "";
@@ -267,23 +273,81 @@
         else if (to) titleRange = `(Up to ${formatMonth(to)})`;
         else titleRange = `(All Time)`;
 
-        title = `Monthly Collection Report ${titleRange}`;
-        
-        let filtered = allPayments.filter(p => {
-          let pM = String(p.rentMonth).substring(0, 7);
-          return (!from || pM >= from) && (!to || pM <= to);
-        });
+        if (view === 'month') {
+          // ===== MONTH WISE =====
+          title = `Monthly Collection Report - Month Wise ${titleRange}`;
 
-        filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+          const now = new Date();
+          const curMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
 
-        // ✨ মোট কালেকশন বের করা
-        const totalAmt = filtered.reduce((sum, p) => sum + Number(p.amount), 0);
+          // সবচেয়ে আগের move-in মাস বের করা
+          let earliest = curMonth;
+          allTenants.forEach(t => {
+            const m = String(t.moveIn || '').substring(0, 7);
+            if (/^\d{4}-\d{2}$/.test(m) && m < earliest) earliest = m;
+          });
 
-        head = ["Date", "Flat", "Tenant", "Rent Month", "Amount", "Method", "Received From"];
-        body = filtered.map(p => [p.date, p.flatNumber, p.tenantName, formatMonth(p.rentMonth), p.amount, p.method, p.receivedFrom || 'N/A']);
-        
-        // ✨ টেবিলের শুরুতে সামারি রো যোগ করা
-        body.unshift(["SUMMARY:", `Total Collection: ৳${totalAmt}`, "", "", "", "", ""]);
+          const startM = from || earliest;
+          const endM = to || curMonth;
+
+          // মাসের লিস্ট বানানো
+          const months = [];
+          let [y, mo] = startM.split('-').map(Number);
+          const [ey, emo] = endM.split('-').map(Number);
+          while (y < ey || (y === ey && mo <= emo)) {
+            months.push(y + '-' + String(mo).padStart(2, '0'));
+            mo++;
+            if (mo > 12) { mo = 1; y++; }
+          }
+
+          let gExpected = 0, gCollected = 0, gDue = 0;
+          const rows = months.map(m => {
+            let expected = 0, tenantCount = 0;
+            allTenants.forEach(t => {
+              const inM = String(t.moveIn || '').substring(0, 7);
+              if (!/^\d{4}-\d{2}$/.test(inM)) return;
+              const outRaw = String(t.moveOut || '').substring(0, 7);
+              const outM = /^\d{4}-\d{2}$/.test(outRaw) ? outRaw : null;
+              if (inM <= m && (!outM || outM >= m)) {
+                expected += Number(t.rent) || 0;
+                tenantCount++;
+              }
+            });
+
+            const collected = allPayments
+              .filter(p => String(p.rentMonth).substring(0, 7) === m)
+              .reduce((s, p) => s + Number(p.amount), 0);
+
+            const due = Math.max(0, expected - collected);
+            gExpected += expected; gCollected += collected; gDue += due;
+            return [formatMonth(m), tenantCount, expected, collected, due, m];
+          });
+
+          rows.sort((a, b) => b[5].localeCompare(a[5])); // নতুন মাস আগে
+
+          head = ["Rent Month", "Tenants", "Expected", "Collected", "Due"];
+          body = rows.map(r => r.slice(0, 5));
+          body.unshift(["SUMMARY:", `Expected: ৳${gExpected}`, `Collected: ৳${gCollected}`, `Due: ৳${gDue}`, ""]);
+
+        } else {
+          // ===== TENANT WISE (আগের কোড) =====
+          title = `Monthly Collection Report ${titleRange}`;
+
+          let filtered = allPayments.filter(p => {
+            let pM = String(p.rentMonth).substring(0, 7);
+            return (!from || pM >= from) && (!to || pM <= to);
+          });
+          filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+          // ✨ মোট কালেকশন বের করা
+          const totalAmt = filtered.reduce((sum, p) => sum + Number(p.amount), 0);
+
+          head = ["Date", "Flat", "Tenant", "Rent Month", "Amount", "Method", "Received From"];
+          body = filtered.map(p => [p.date, p.flatNumber, p.tenantName, formatMonth(p.rentMonth), p.amount, p.method, p.receivedFrom || 'N/A']);
+          
+          // ✨ টেবিলের শুরুতে সামারি রো যোগ করা
+          body.unshift(["SUMMARY:", `Total Collection: ৳${totalAmt}`, "", "", "", "", ""]);
+        }
 
       } else if (type === 'tenant') {
         standardContainer.style.display = 'block';
@@ -513,7 +577,7 @@
         } else {
           tableBody.innerHTML = body.map(row => {
             const isSummary = row[0] === "SUMMARY:";
-            // ✨ সামারি রো-টি পুরো টেবিল জুড়ে (colspan) দেখানোর ব্যবস্থা
+            // ✨ সামারি রো-টি পুরো টেবিল জুড়ে (colspan) দেখানোর ব্যবস্থা
             if (isSummary) {
               const summaryText = row.filter(c => c !== "" && c !== "---").join(" | ");
               return `<tr class="summary-row"><td colspan="${head.length}" style="text-align: center; font-size: 14px;">${summaryText}</td></tr>`;
@@ -522,7 +586,8 @@
             return `<tr>` + row.map((cell, colIdx) => {
               let tdClass = '';
               if (head[colIdx] === "Rent Month") tdClass = 'class="month-col"';
-              if (head[colIdx] === "Amount" || head[colIdx] === "Total Paid") tdClass = 'class="amount-col"';
+              if (head[colIdx] === "Amount" || head[colIdx] === "Total Paid" || head[colIdx] === "Collected" || head[colIdx] === "Expected") tdClass = 'class="amount-col"';
+              if (head[colIdx] === "Due") tdClass = 'class="due-col"';
               return `<td ${tdClass}>${cell}</td>`;
             }).join('') + `</tr>`;
           }).join('');
@@ -684,7 +749,7 @@
         headStyles: { fillColor: [15, 118, 110], textColor: 255 },
         didParseCell: function(data) {
           const colName = currentReportData.head[data.column.index];
-          if (colName === 'Amount' || colName === 'Total Paid' || colName === 'Monthly Rent') {
+          if (['Amount', 'Total Paid', 'Monthly Rent', 'Expected', 'Collected', 'Due'].includes(colName)) {
             data.cell.styles.halign = 'right';
           }
         }

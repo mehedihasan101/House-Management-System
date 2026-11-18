@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Reports - House Management</title>
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- PDF এবং Excel জেনারেট করার জন্য CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    .report-controls { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .control-row { display: flex; gap: 10px; flex-wrap: wrap; width: 100%; }
+    
+    .control-row select, .control-row input { 
+      flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; background: var(--bg); min-width: 140px; 
+    }
+    
+    .action-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .action-btns button { flex: 1; padding: 12px; font-weight: 600; border-radius: 8px; cursor: pointer; border: none; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 14px; }
+    .btn-pdf { background: #ef4444; color: white; }
+    .btn-excel { background: #10b981; color: white; }
+    .btn-view { background: var(--primary); color: white; }
+
+    /* প্রিভিউ টেবিল (সাধারণ রিপোর্টের জন্য) */
+    .preview-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; overflow-x: auto; }
+    .preview-table-wrapper { overflow-x: auto; width: 100%; }
+    .preview-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+    .preview-table th, .preview-table td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    .preview-table th { background: var(--bg); color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+    
+    /* ✨ কালার স্টাইল */
+    tr.summary-row td { background-color: #f0fdf4 !important; font-weight: bold; color: #166534; }
+    td.month-col { color: #0369a1; background-color: #e0f2fe; font-weight: 600; text-align: center; border-radius: 4px; white-space: nowrap; }
+    td.amount-col { color: #10b981; font-weight: 700; }
+
+    /* ✨ Flat History এর জন্য নতুন ব্লক ডিজাইন */
+    .tenant-report-block {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      background: var(--bg);
+      overflow: hidden;
+    }
+    .tenant-header {
+      background: var(--surface);
+      padding: 16px;
+      border-bottom: 2px solid var(--primary);
+    }
+    .tenant-header h3 { margin: 0 0 4px 0; color: var(--primary); font-size: 18px; }
+    .tenant-header p { margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+    
+    .tenant-table-wrapper { padding: 0 16px; }
+    .tenant-table-wrapper .preview-table th { background: transparent; border-bottom: 1px solid var(--border); }
+    
+    .tenant-summary {
+      background: var(--surface);
+      padding: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .tenant-summary span { font-weight: 600; color: var(--text-main); }
+    .due-green { color: #10b981 !important; }
+    .due-red { color: #ef4444 !important; }
+
+    /* ✨ Rent vs Cost Summary ডিজাইন */
+    .cr-block { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 20px; background: var(--bg); overflow: hidden; }
+    .cr-header { padding: 12px 16px; font-weight: bold; font-size: 15px; color: white; }
+    .cr-header-cost { background: #ef4444; } /* লাল */
+    .cr-header-rent { background: #10b981; } /* সবুজ */
+    .cr-header-result { background: #0f766e; } /* নীল */
+    
+    .cr-total { padding: 12px 16px; font-weight: bold; background: var(--surface); border-top: 1px solid var(--border); font-size: 15px; }
+    .cr-net { font-size: 20px; font-weight: bold; color: #0f766e; }
+
+    .hidden { display: none !important; }
+
+    /* মোবাইল ভিউ টেবিল ফন্ট অ্যাডজাস্টমেন্ট */
+    @media (max-width: 600px) {
+      .preview-table th, .preview-table td { padding: 6px; font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">House Manage</div>
+    <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
+    <a href="flats.html" class="nav-item">🏢 All Flats</a>
+    <a href="tenants.html" class="nav-item">👥 Tenants</a>
+    <a href="payments.html" class="nav-item">💵 Rent Collection</a>
+    <a href="performance.html" class="nav-item">📈 Performance</a>
+    <a href="reports.html" class="nav-item active">📄 Reports</a>
+    <a href="expenses.html" class="nav-item">💸 Expenses</a>
+    <a href="reset-password.html" class="nav-item">🔐 Reset Password</a>
+    <a href="#" class="nav-item" onclick="logout()">🚪 Logout</a>
+  </aside>
+
+  <main class="main-content">
+    <div class="container">
+      <h1 class="page-title">Report Generator</h1>
+
+      <div class="report-controls">
+        <div class="control-row">
+          <select id="reportType" onchange="changeReportType()">
+            <option value="tenant" selected>👤 Tenant Detailed Report</option>
+            <option value="monthly">📅 Monthly Collection Report</option>
+            <option value="flat">🏢 Flat History (Latest First)</option>
+            <option value="cost_revenue">💰 Rent vs Cost Summary</option>
+          </select>
+        </div>
+
+        <div id="filter-monthly" class="control-row hidden">
+          <input type="month" id="f-from-month" title="From Month">
+          <input type="month" id="f-to-month" title="To Month">
+        </div>
+
+        <div id="filter-tenant" class="control-row">
+          <select id="f-tenant-id">
+            <option value="">Select an Active Tenant...</option>
+          </select>
+        </div>
+
+        <div id="filter-flat" class="control-row hidden">
+          <select id="f-flat-number">
+            <option value="">Select a Flat...</option>
+          </select>
+        </div>
+
+        <div id="filter-cost-revenue" class="control-row hidden">
+          <input type="month" id="f-cr-from" title="From Month">
+          <input type="month" id="f-cr-to" title="To Month">
+        </div>
+
+        <div class="action-btns">
+          <button class="btn-view" onclick="generateReport()">👁️ Preview Report</button>
+          <button class="btn-pdf" onclick="downloadPDF()">⬇️ Download PDF</button>
+          <button class="btn-excel" onclick="downloadExcel()">⬇️ Download Excel</button>
+        </div>
+      </div>
+
+      <div class="preview-section">
+        <h3 id="previewTitle" style="margin-bottom: 12px; font-size: 16px; display: none;">Report Preview</h3>
+        
+        <!-- সাধারণ টেবিল (Monthly, Tenant) -->
+        <div id="standardPreviewContainer" class="preview-table-wrapper">
+          <table class="preview-table" id="previewTable">
+            <thead id="previewHead"></thead>
+            <tbody id="previewBody">
+              <tr><td style="text-align: center;">Select options and click "Preview Report"</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Flat History এর জন্য ব্লক ভিউ -->
+        <div id="flatPreviewContainer" style="display: none;"></div>
+
+        <!-- Rent vs Cost Summary এর জন্য ব্লক ভিউ -->
+        <div id="costRevenuePreviewContainer" style="display: none;"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="b-nav-item">📊 Home</a>
+    <a href="reports.html" class="b-nav-item active">📄 Reports</a>
+    <a href="payments.html" class="b-nav-item">💵 Payments</a>
+    <a href="expenses.html" class="b-nav-item">💸 Expenses</a>
+    <a href="more.html" class="b-nav-item">☰ More</a>
+  </nav>
+
+  <script src="app.js"></script>
+  <script>
+    let allPayments = [];
+    let allTenants = [];
+    let allFlats = [];
+    let allExpenses = [];
+    let currentReportData = null;
+
+    function formatMonth(monthStr) {
+      if(!monthStr) return 'N/A';
+      const match = String(monthStr).match(/^(\d{4})-(\d{2})/);
+      if (!match) return monthStr;
+      const year = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10) - 1;
+      const date = new Date(year, month, 1);
+      return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    }
+
+    async function initReports() {
+      const [payments, tenants, flats, expenses] = await Promise.all([
+        apiCall('getPayments'),
+        apiCall('getTenants'),
+        apiCall('getFlats'),
+        apiCall('getExpenses')
+      ]);
+
+      allPayments = payments || [];
+      allTenants = tenants || [];
+      allFlats = flats || [];
+      allExpenses = expenses || [];
+
+      const activeTenantsOnly = allTenants.filter(t => t.status === 'Active');
+      activeTenantsOnly.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
+
+      const tenantSelect = document.getElementById('f-tenant-id');
+      activeTenantsOnly.forEach(t => {
+        tenantSelect.innerHTML += `<option value="${t.tenantId}">${t.name} (Flat ${t.flatNumber})</option>`;
+      });
+
+      allFlats.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
+      const flatSelect = document.getElementById('f-flat-number');
+      allFlats.forEach(f => {
+        flatSelect.innerHTML += `<option value="${f.flatNumber}">Flat ${f.flatNumber} (${f.flatName})</option>`;
+      });
+
+      changeReportType();
+    }
+
+    function changeReportType() {
+      const type = document.getElementById('reportType').value;
+      document.getElementById('filter-monthly').classList.add('hidden');
+      document.getElementById('filter-tenant').classList.add('hidden');
+      document.getElementById('filter-flat').classList.add('hidden');
+      document.getElementById('filter-cost-revenue').classList.add('hidden');
+
+      if (type === 'monthly') document.getElementById('filter-monthly').classList.remove('hidden');
+      if (type === 'tenant') document.getElementById('filter-tenant').classList.remove('hidden');
+      if (type === 'flat') document.getElementById('filter-flat').classList.remove('hidden');
+      if (type === 'cost_revenue') document.getElementById('filter-cost-revenue').classList.remove('hidden');
+    }
+
+    function generateReport() {
+      const type = document.getElementById('reportType').value;
+      const tableHead = document.getElementById('previewHead');
+      const tableBody = document.getElementById('previewBody');
+      const titleEl = document.getElementById('previewTitle');
+      
+      const standardContainer = document.getElementById('standardPreviewContainer');
+      const flatContainer = document.getElementById('flatPreviewContainer');
+      const costRevenueContainer = document.getElementById('costRevenuePreviewContainer');
+
+      let head = [];
+      let body = [];
+      let title = "";
+      let flatBlocksData = [];
+      let costRevenueData = null;
+
+      if (type === 'monthly') {
+        standardContainer.style.display = 'block';
+        flatContainer.style.display = 'none';
+        costRevenueContainer.style.display = 'none';
+
+        const from = document.getElementById('f-from-month').value;
+        const to = document.getElementById('f-to-month').value;
+        
+        // ✨ ডাইনামিক টাইটেল রেঞ্জ
+        let titleRange = "";
+        if (from && to) titleRange = `(${formatMonth(from)} - ${formatMonth(to)})`;
+        else if (from) titleRange = `(From ${formatMonth(from)})`;
+        else if (to) titleRange = `(Up to ${formatMonth(to)})`;
+        else titleRange = `(All Time)`;
+
+        title = `Monthly Collection Report ${titleRange}`;
+        
+        let filtered = allPayments.filter(p => {
+          let pM = String(p.rentMonth).substring(0, 7);
+          return (!from || pM >= from) && (!to || pM <= to);
+        });
+
+        filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // ✨ মোট কালেকশন বের করা
+        const totalAmt = filtered.reduce((sum, p) => sum + Number(p.amount), 0);
+
+        head = ["Date", "Flat", "Tenant", "Rent Month", "Amount", "Method", "Received From"];
+        body = filtered.map(p => [p.date, p.flatNumber, p.tenantName, formatMonth(p.rentMonth), p.amount, p.method, p.receivedFrom || 'N/A']);
+        
+        // ✨ টেবিলের শুরুতে সামারি রো যোগ করা
+        body.unshift(["SUMMARY:", `Total Collection: ৳${totalAmt}`, "", "", "", "", ""]);
+
+      } else if (type === 'tenant') {
+        standardContainer.style.display = 'block';
+        flatContainer.style.display = 'none';
+        costRevenueContainer.style.display = 'none';
+
+        const tId = document.getElementById('f-tenant-id').value;
+        if (!tId) return alert("Please select a tenant");
+        
+        const tenant = allTenants.find(t => t.tenantId === tId);
+        let moveInStr = 'N/A';
+        if (tenant.moveIn) {
+          const d = new Date(tenant.moveIn);
+          if (!isNaN(d.getTime())) moveInStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+        
+        title = `Tenant Report: ${tenant.name} (Flat ${tenant.flatNumber}) - In: ${moveInStr}`;
+
+        let tenantPayments = allPayments.filter(p => p.tenantName === tenant.name && String(p.flatNumber) === String(tenant.flatNumber));
+        tenantPayments.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        let totalPaid = tenantPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+        
+        let moveIn = new Date(tenant.moveIn);
+        let moveOut = tenant.moveOut ? new Date(tenant.moveOut) : new Date();
+        let months = (moveOut.getFullYear() - moveIn.getFullYear()) * 12 + (moveOut.getMonth() - moveIn.getMonth()) + 1;
+        if(months < 1) months = 1;
+        let expected = months * Number(tenant.rent);
+        let due = Math.max(0, expected - totalPaid);
+
+        head = ["Date", "Rent Month", "Amount", "Method", "Status", "Received From"];
+        body = tenantPayments.map(p => [p.date, formatMonth(p.rentMonth), p.amount, p.method, p.status, p.receivedFrom || 'N/A']);
+        
+        // টেন্যান্ট রিপোর্টের সামারি রো
+        body.unshift(["SUMMARY:", `Rent: ৳${tenant.rent}`, `Paid: ৳${totalPaid}`, `Due: ৳${due}`, "---", "---"]);
+
+      } else if (type === 'flat') {
+        standardContainer.style.display = 'none';
+        costRevenueContainer.style.display = 'none';
+        flatContainer.style.display = 'block';
+
+        const flatNo = document.getElementById('f-flat-number').value;
+        if (!flatNo) return alert("Please select a flat");
+        
+        const flat = allFlats.find(f => String(f.flatNumber) === String(flatNo));
+        title = `Flat History: ${flat.flatNumber} (${flat.flatName})`;
+
+        let flatTenants = allTenants.filter(t => String(t.flatNumber) === String(flatNo));
+        flatTenants.sort((a, b) => new Date(b.moveIn) - new Date(a.moveIn));
+
+        flatBlocksData = flatTenants.map(t => {
+          let payments = allPayments.filter(p => p.tenantName === t.name && String(p.flatNumber) === String(t.flatNumber));
+          payments.sort((a, b) => new Date(b.date) - new Date(a.date));
+          
+          let totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+          let moveIn = new Date(t.moveIn);
+          let moveOut = t.moveOut ? new Date(t.moveOut) : new Date();
+          let months = (moveOut.getFullYear() - moveIn.getFullYear()) * 12 + (moveOut.getMonth() - moveIn.getMonth()) + 1;
+          if(months < 1) months = 1;
+          let expected = months * Number(t.rent);
+          let due = Math.max(0, expected - totalPaid);
+
+          return { tenant: t, payments: payments, expected: expected, totalPaid: totalPaid, due: due };
+        });
+
+        flatContainer.innerHTML = flatBlocksData.map(block => {
+          const t = block.tenant;
+          const moveOutStr = t.moveOut ? t.moveOut : 'Ongoing';
+          const dueClass = block.due === 0 ? 'due-green' : 'due-red';
+          
+          let payRows = block.payments.map(p => `
+            <tr>
+              <td>${p.date}</td>
+              <td class="month-col">${formatMonth(p.rentMonth)}</td>
+              <td class="amount-col">৳ ${p.amount}</td>
+              <td>${p.method}</td>
+              <td>${p.receivedFrom || 'N/A'}</td>
+            </tr>
+          `).join('');
+
+          if (block.payments.length === 0) {
+            payRows = `<tr><td colspan="5" style="text-align:center;">No payments recorded.</td></tr>`;
+          }
+
+          return `
+            <div class="tenant-report-block">
+              <div class="tenant-header">
+                <h3>${t.name}</h3>
+                <p>Move In: ${t.moveIn} | Move Out: ${moveOutStr}</p>
+              </div>
+              <div class="tenant-table-wrapper">
+                <div class="preview-table-wrapper">
+                  <table class="preview-table">
+                    <thead>
+                      <tr><th>Date</th><th>Rent Month</th><th>Amount</th><th>Method</th><th>Received From</th></tr>
+                    </thead>
+                    <tbody>${payRows}</tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="tenant-summary">
+                <span>Total Rent: ৳ ${block.expected}</span>
+                <span>Total Received: ৳ ${block.totalPaid}</span>
+                <span class="${dueClass}">Due: ৳ ${block.due} ${block.due === 0 ? '✅' : ''}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } else if (type === 'cost_revenue') {
+        standardContainer.style.display = 'none';
+        flatContainer.style.display = 'none';
+        costRevenueContainer.style.display = 'block';
+
+        const fromMonth = document.getElementById('f-cr-from').value;
+        const toMonth = document.getElementById('f-cr-to').value;
+        
+        if (!fromMonth && !toMonth) return alert("Please select at least 'From Month' or 'To Month'");
+
+        const costs = allExpenses.filter(e => {
+          const eM = String(e.date).substring(0, 7);
+          return (!fromMonth || eM >= fromMonth) && (!toMonth || eM <= toMonth);
+        });
+        
+        costs.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const totalCost = costs.reduce((sum, e) => sum + Number(e.amount), 0);
+
+        const rents = allPayments.filter(p => {
+          const pM = String(p.rentMonth).substring(0, 7);
+          return (!fromMonth || pM >= fromMonth) && (!toMonth || pM <= toMonth);
+        }).map(p => {
+          const tenant = allTenants.find(t => String(t.flatNumber) === String(p.flatNumber) && t.name === p.tenantName);
+          return {
+            ...p,
+            moveIn: tenant ? tenant.moveIn : 'N/A',
+            moveOut: tenant ? (tenant.moveOut || 'Ongoing') : 'N/A'
+          };
+        });
+        
+        rents.sort((a, b) => {
+          const monthA = String(a.rentMonth).substring(0, 7);
+          const monthB = String(b.rentMonth).substring(0, 7);
+          if (monthA !== monthB) {
+            return monthB.localeCompare(monthA); 
+          }
+          return String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }); 
+        });
+        
+        const totalRent = rents.reduce((sum, p) => sum + Number(p.amount), 0);
+        const net = totalRent - totalCost;
+        
+        let titleRange = "";
+        if (fromMonth && toMonth) titleRange = `${formatMonth(fromMonth)} - ${formatMonth(toMonth)}`;
+        else if (fromMonth) titleRange = `From ${formatMonth(fromMonth)}`;
+        else titleRange = `Up to ${formatMonth(toMonth)}`;
+        
+        title = `Rent vs Cost Summary (${titleRange})`;
+
+        costRevenueData = { fromMonth, toMonth, costs, totalCost, rents, totalRent, net };
+
+        costRevenueContainer.innerHTML = `
+          <!-- Cost Block -->
+          <div class="cr-block">
+            <div class="cr-header cr-header-cost">Total Costs & Bills</div>
+            <div class="preview-table-wrapper" style="padding:0;">
+              <table class="preview-table">
+                <thead><tr><th>Date</th><th>Category</th><th>Title</th><th>Amount</th></tr></thead>
+                <tbody>
+                  ${costs.length ? costs.map(c => `<tr><td>${c.date}</td><td>${c.category}</td><td>${c.title}</td><td class="amount-col" style="color:#ef4444; white-space:nowrap;">৳ ${c.amount}</td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;">No costs found</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+            <div class="cr-total" style="color: #ef4444;">Total Cost: ৳ ${totalCost}</div>
+          </div>
+
+          <!-- Rent Block -->
+          <div class="cr-block">
+            <div class="cr-header cr-header-rent">Rent Collections</div>
+            <div class="preview-table-wrapper" style="padding:0;">
+              <table class="preview-table">
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Flat</th><th>Tenant</th><th>Rent Month</th>
+                    <th>Move In</th><th>Move Out</th><th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rents.length ? rents.map(r => `
+                    <tr>
+                      <td>${r.date}</td>
+                      <td>${r.flatNumber}</td>
+                      <td>${r.tenantName}</td>
+                      <td class="month-col">${formatMonth(r.rentMonth)}</td>
+                      <td>${r.moveIn}</td>
+                      <td>${r.moveOut}</td>
+                      <td class="amount-col" style="color:#10b981; white-space:nowrap;">৳ ${r.amount}</td>
+                    </tr>
+                  `).join('') : '<tr><td colspan="7" style="text-align:center;">No rent collected</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+            <div class="cr-total" style="color: #10b981;">Total Rent Collected: ৳ ${totalRent}</div>
+          </div>
+
+          <!-- Final Result Block -->
+          <div class="cr-block">
+            <div class="cr-header cr-header-result">Final Summary</div>
+            <div class="cr-total" style="font-size: 16px;">
+              Total Rent: <span style="color: #10b981;">৳ ${totalRent}</span> <br>
+              Total Cost: <span style="color: #ef4444;">৳ ${totalCost}</span> <br>
+              <hr style="border:0; border-top: 1px solid #ccc; margin: 8px 0;">
+              Net Balance: <span class="cr-net" style="color: ${net >= 0 ? '#0f766e' : '#ef4444'};">৳ ${net}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      currentReportData = { type, title, head, body, flatBlocksData, costRevenueData };
+
+      titleEl.textContent = title;
+      titleEl.style.display = 'block';
+
+      if (type !== 'flat' && type !== 'cost_revenue') {
+        tableHead.innerHTML = `<tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>`;
+        if (body.length === 0) {
+          tableBody.innerHTML = `<tr><td colspan="${head.length}" style="text-align: center;">No data found for this selection.</td></tr>`;
+        } else {
+          tableBody.innerHTML = body.map(row => {
+            const isSummary = row[0] === "SUMMARY:";
+            // ✨ সামারি রো-টি পুরো টেবিল জুড়ে (colspan) দেখানোর ব্যবস্থা
+            if (isSummary) {
+              const summaryText = row.filter(c => c !== "" && c !== "---").join(" | ");
+              return `<tr class="summary-row"><td colspan="${head.length}" style="text-align: center; font-size: 14px;">${summaryText}</td></tr>`;
+            }
+            
+            return `<tr>` + row.map((cell, colIdx) => {
+              let tdClass = '';
+              if (head[colIdx] === "Rent Month") tdClass = 'class="month-col"';
+              if (head[colIdx] === "Amount" || head[colIdx] === "Total Paid") tdClass = 'class="amount-col"';
+              return `<td ${tdClass}>${cell}</td>`;
+            }).join('') + `</tr>`;
+          }).join('');
+        }
+      }
+    }
+
+    // ==========================================
+    // PDF ডাউনলোড লজিক
+    // ==========================================
+    function downloadPDF() {
+      if (!currentReportData) return alert("Please generate a report first.");
+      
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('p', 'pt', 'a4');
+      
+      doc.setFontSize(18);
+      doc.text(currentReportData.title, 40, 40);
+      
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 40, 60);
+
+      let startY = 80;
+
+      if (currentReportData.type === 'flat') {
+        currentReportData.flatBlocksData.forEach((block, index) => {
+          if (startY > 650) { doc.addPage(); startY = 40; }
+          
+          const t = block.tenant;
+          const moveOutStr = t.moveOut ? t.moveOut : 'Ongoing';
+
+          doc.setFontSize(14);
+          doc.setTextColor(15, 118, 110);
+          doc.text(`${t.name}`, 40, startY);
+          
+          doc.setFontSize(10);
+          doc.setTextColor(100, 100, 100);
+          doc.text(`Move In: ${t.moveIn} | Move Out: ${moveOutStr}`, 40, startY + 15);
+
+          const pdfBody = block.payments.map(p => [p.date, formatMonth(p.rentMonth), 'Tk ' + p.amount, p.method, p.receivedFrom || 'N/A']);
+
+          doc.autoTable({
+            startY: startY + 25,
+            head: [["Date", "Rent Month", "Amount", "Method", "Received From"]],
+            body: pdfBody.length > 0 ? pdfBody : [["No payments recorded", "", "", "", ""]],
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 4, lineColor: [200, 200, 200], lineWidth: 0.5 },
+            headStyles: { fillColor: [15, 118, 110], textColor: 255 }
+          });
+
+          startY = doc.lastAutoTable.finalY + 15;
+
+          doc.setFontSize(11);
+          doc.setTextColor(50, 50, 50);
+          doc.text(`Total Rent: Tk ${block.expected}   |   Total Received: Tk ${block.totalPaid}`, 40, startY);
+          
+          if (block.due === 0) doc.setTextColor(16, 185, 129);
+          else doc.setTextColor(239, 68, 68);
+          
+          doc.text(`Due: Tk ${block.due} ${block.due === 0 ? '✅' : ''}`, 40, startY + 15);
+          startY += 40;
+        });
+
+        doc.save(`${currentReportData.title.replace(/ /g, '_')}.pdf`);
+        return;
+      }
+
+      if (currentReportData.type === 'cost_revenue') {
+        const data = currentReportData.costRevenueData;
+
+        doc.setFontSize(12);
+        doc.setTextColor(239, 68, 68); 
+        doc.text("Total Costs & Bills", 40, startY);
+
+        const costRows = data.costs.map(c => [c.date, c.category, c.title, 'Tk ' + c.amount]);
+        doc.autoTable({
+          startY: startY + 10,
+          head: [["Date", "Category", "Title", "Amount"]],
+          body: costRows.length > 0 ? costRows : [["No costs found", "", "", ""]],
+          theme: 'grid',
+          styles: { fontSize: 9, cellPadding: 4, lineColor: [200, 200, 200], lineWidth: 0.5 },
+          headStyles: { fillColor: [239, 68, 68], textColor: 255 } 
+        });
+
+        startY = doc.lastAutoTable.finalY + 10;
+        doc.setFontSize(11);
+        doc.setTextColor(239, 68, 68);
+        doc.text(`Total Cost: Tk ${data.totalCost}`, 40, startY);
+        startY += 25;
+
+        doc.setFontSize(12);
+        doc.setTextColor(16, 185, 129); 
+        doc.text("Rent Collections", 40, startY);
+
+        const rentRows = data.rents.map(r => [
+          r.date, r.flatNumber, r.tenantName, formatMonth(r.rentMonth), 
+          r.moveIn, r.moveOut, 'Tk ' + r.amount
+        ]);
+        
+        doc.autoTable({
+          startY: startY + 10,
+          head: [["Date", "Flat", "Tenant", "Rent Month", "Move In", "Move Out", "Amount"]],
+          body: rentRows.length > 0 ? rentRows : [["No rent collected", "", "", "", "", "", ""]],
+          theme: 'grid',
+          styles: { fontSize: 8, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.5 },
+          headStyles: { fillColor: [16, 185, 129], textColor: 255 } 
+        });
+
+        startY = doc.lastAutoTable.finalY + 10;
+        doc.setFontSize(11);
+        doc.setTextColor(16, 185, 129);
+        doc.text(`Total Rent Collected: Tk ${data.totalRent}`, 40, startY);
+        startY += 25;
+
+        doc.setFontSize(14);
+        doc.setTextColor(15, 118, 110); 
+        doc.text("Final Summary", 40, startY);
+
+        doc.setFontSize(11);
+        doc.setTextColor(50, 50, 50);
+        doc.text(`Total Rent: Tk ${data.totalRent}`, 40, startY + 15);
+        doc.text(`Total Cost: Tk ${data.totalCost}`, 40, startY + 30);
+        
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        if (data.net >= 0) doc.setTextColor(15, 118, 110); 
+        else doc.setTextColor(239, 68, 68); 
+        
+        doc.text(`Net Balance: Tk ${data.net}`, 40, startY + 50);
+
+        doc.save(`${currentReportData.title.replace(/ /g, '_')}.pdf`);
+        return;
+      }
+
+      // ✨ সাধারণ রিপোর্টের PDF (Monthly, Tenant)
+      let pdfBody = currentReportData.body;
+
+      // ✨ সামারি রো-টি সুন্দরভাবে এক্সট্রাক্ট করা (সব রিপোর্টের জন্য)
+      if (pdfBody.length > 0 && pdfBody[0][0] === "SUMMARY:") {
+        const summaryText = pdfBody[0].filter(c => c !== "" && c !== "---").map(c => String(c).replace(/৳/g, 'Tk ')).join("   |   ");
+
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(22, 101, 52);
+        doc.text(summaryText, 40, startY);
+
+        startY += 20; 
+        pdfBody = pdfBody.slice(1); 
+      }
+
+      const cleanBody = pdfBody.map(row => row.map(cell => String(cell).replace(/৳/g, 'Tk ')));
+
+      doc.autoTable({
+        startY: startY,
+        head: [currentReportData.head],
+        body: cleanBody,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 5, lineColor: [200, 200, 200], lineWidth: 0.5 },
+        headStyles: { fillColor: [15, 118, 110], textColor: 255 },
+        didParseCell: function(data) {
+          const colName = currentReportData.head[data.column.index];
+          if (colName === 'Amount' || colName === 'Total Paid' || colName === 'Monthly Rent') {
+            data.cell.styles.halign = 'right';
+          }
+        }
+      });
+
+      doc.save(`${currentReportData.title.replace(/ /g, '_')}.pdf`);
+    }
+
+    function downloadExcel() {
+      if (!currentReportData) return alert("Please generate a report first.");
+      
+      let wsData = [];
+      
+      if (currentReportData.type === 'flat') {
+        currentReportData.flatBlocksData.forEach(block => {
+          wsData.push([`Tenant: ${block.tenant.name}`, `Move In: ${block.tenant.moveIn}`, `Move Out: ${block.tenant.moveOut || 'Ongoing'}`]);
+          wsData.push(["Date", "Rent Month", "Amount", "Method", "Received From"]);
+          block.payments.forEach(p => {
+            wsData.push([p.date, formatMonth(p.rentMonth), p.amount, p.method, p.receivedFrom || 'N/A']);
+          });
+          wsData.push([`Summary: Rent - ${block.expected}`, `Paid - ${block.totalPaid}`, `Due - ${block.due}`]);
+          wsData.push([]);
+        });
+      } 
+      else if (currentReportData.type === 'cost_revenue') {
+        const data = currentReportData.costRevenueData;
+        
+        wsData.push([`RENT VS COST SUMMARY: ${currentReportData.title}`]);
+        wsData.push([]);
+        
+        wsData.push(["--- COSTS & BILLS ---"]);
+        wsData.push(["Date", "Category", "Title", "Amount"]);
+        data.costs.forEach(c => wsData.push([c.date, c.category, c.title, c.amount]));
+        wsData.push(["", "", "Total Cost:", data.totalCost]);
+        wsData.push([]);
+
+        wsData.push(["--- RENT COLLECTIONS ---"]);
+        wsData.push(["Date", "Flat", "Tenant", "Rent Month", "Move In", "Move Out", "Amount"]);
+        data.rents.forEach(r => wsData.push([
+          r.date, r.flatNumber, r.tenantName, formatMonth(r.rentMonth), r.moveIn, r.moveOut, r.amount
+        ]));
+        wsData.push(["", "", "", "", "", "Total Rent:", data.totalRent]);
+        wsData.push([]);
+
+        wsData.push(["--- FINAL SUMMARY ---"]);
+        wsData.push(["Total Rent", data.totalRent]);
+        wsData.push(["Total Cost", data.totalCost]);
+        wsData.push(["Net Balance", data.net]);
+      } 
+      else {
+        wsData = [
+          [currentReportData.title],
+          [`Generated on: ${new Date().toLocaleString()}`],
+          [], 
+          currentReportData.head,
+          ...currentReportData.body
+        ];
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Report");
+      
+      XLSX.writeFile(wb, `${currentReportData.title.replace(/ /g, '_')}.xlsx`);
+    }
+
+    initReports();
+  </script>
+</body>
+</html>
