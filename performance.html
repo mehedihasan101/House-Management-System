@@ -7,42 +7,6 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* ✨ লোডিং অ্যানিমেশন স্টাইল */
-    .loader-overlay {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(243, 246, 250, 0.9); /* হালকা ব্যাকগ্রাউন্ড */
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-      transition: opacity 0.3s ease;
-    }
-    .loader-overlay.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-    .spinner {
-      border: 4px solid var(--border);
-      border-top: 4px solid var(--primary);
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin-bottom: 12px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .loader-text {
-      color: var(--primary);
-      font-weight: 600;
-      font-size: 14px;
-      letter-spacing: 0.5px;
-    }
-
     /* টেবিল স্টাইল */
     .perf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .perf-table th, .perf-table td { padding: 12px 8px; border-bottom: 1px solid var(--border); text-align: left; }
@@ -52,14 +16,17 @@
     .perf-row:hover { background: var(--bg); }
     .perf-row.inactive { background: #fef2f2; }
     .perf-row.inactive:hover { background: #fee2e2; }
+    /* লোডের পর রো গুলো একটা একটা করে ফেড-ইন হবে */
+    .perf-row.animate { animation: cardIn 0.4s ease both; }
 
     .progress-bar { width: 100%; background: var(--border); border-radius: 10px; height: 8px; margin-top: 4px; }
     .progress-fill { height: 8px; border-radius: 10px; background: var(--success); }
 
     /* মডাল স্টাইল */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-    .modal-overlay.active { display: flex; }
+    .modal-overlay.active { display: flex; animation: overlayIn 0.2s ease both; }
     .modal { background: var(--surface); width: 100%; max-width: 450px; border-radius: var(--radius); padding: 20px; max-height: 90vh; overflow-y: auto; }
+    .modal-overlay.active .modal { animation: modalIn 0.25s ease both; }
     .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
     .modal-header h2 { margin: 0; font-size: 18px; color: var(--primary); }
     .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
@@ -68,15 +35,56 @@
     .detail-row:last-child { border-bottom: none; }
     .detail-label { color: var(--text-muted); font-weight: 500; }
     .detail-value { font-weight: 600; text-align: right; }
+
+    /* ===== Keyframes ===== */
+    @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ===== Loading: Spinner + Skeleton ===== */
+    .loading-bar { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); font-size: 13px; font-weight: 500; margin-bottom: 12px; }
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
+
+    .sk-line { height: 10px; border-radius: 4px; background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+    .sk-line.title { height: 13px; width: 70%; margin-bottom: 6px; }
+    .sk-line.w50 { width: 50%; }
+    .sk-line.w80 { width: 80%; }
+
+    /* ===== Mobile: ২ কলাম কমপ্যাক্ট কার্ড ===== */
+    .perf-cards { display: none; }
+
+    .perf-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px; min-width: 0; cursor: pointer; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .perf-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .perf-card.inactive { background: #fef2f2; border-color: #fca5a5; }
+    .perf-card.animate { animation: cardIn 0.4s ease both; }
+
+    .pc-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+    .pc-name { font-size: 12px; font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .pc-flat { background: #e0f2fe; color: #0369a1; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; }
+    .pc-sub { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted); margin: 3px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pc-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .pc-dot.on { background: #10b981; }
+    .pc-dot.off { background: #ef4444; }
+
+    .pc-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); padding: 2px 0; }
+    .pc-row span:last-child { font-weight: 600; color: var(--text-main); }
+    .pc-rate { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+    .pc-rate-top { display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; color: var(--text-muted); }
+    .pc-rate .progress-bar { height: 6px; margin-top: 3px; }
+    .pc-rate .progress-fill { height: 6px; }
+
+    .skeleton-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .perf-empty { grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 13px; padding: 16px 0; }
+
+    @media (max-width: 767px) {
+      .perf-table-wrap { display: none; }
+      .perf-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    }
   </style>
 </head>
 <body>
-  <!-- ✨ লোডার (শুরুতে দেখাবে) -->
-  <div id="pageLoader" class="loader-overlay">
-    <div class="spinner"></div>
-    <div class="loader-text">Loading Performance Data...</div>
-  </div>
-
   <aside class="sidebar">
     <div class="brand">House Manage</div>
     <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
@@ -93,13 +101,19 @@
   <main class="main-content">
     <div class="container">
       <h1 class="page-title">Performance Analytics</h1>
+
+      <!-- Loading indicator (ডেটা এলে হাইড হবে) -->
+      <div class="loading-bar" id="loadingBar">
+        <div class="spinner"></div>
+        <span>Loading performance data...</span>
+      </div>
       
       <div class="card" style="margin-bottom: 16px;">
         <h3 style="font-size: 14px; margin-bottom: 12px; display: flex; justify-content: space-between;">
           <span>Tenant-wise Collection Performance</span>
           <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">Click any row for details</span>
         </h3>
-        <div class="scroll" style="overflow-x: auto;">
+        <div class="scroll perf-table-wrap" style="overflow-x: auto;">
           <table class="perf-table">
             <thead>
               <tr>
@@ -115,6 +129,9 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Mobile: 2-column cards -->
+        <div class="perf-cards" id="perfCards"></div>
       </div>
     </div>
   </main>
@@ -137,25 +154,61 @@
     <a href="reports.html" class="b-nav-item">📄 Reports</a>
     <a href="payments.html" class="b-nav-item">💵 Payments</a>
     <a href="performance.html" class="b-nav-item active">📈 Performance</a>
+    <a href="more.html" class="b-nav-item">☰ More</a>
   </nav>
 
   <script src="app.js"></script>
   <script>
     let allPerfData = [];
 
-    // পেজ লোড হলে ডেটা আনা এবং লোডার হাইড করা
-    async function loadPerformance() {
-      const data = await apiCall('getPerformanceData');
-      
-      // লোডারটি স্মুথলি হাইড করা
-      setTimeout(() => {
-        document.getElementById('pageLoader').classList.add('hidden');
-      }, 300);
+    const loadingBar = document.getElementById('loadingBar');
+    const tbody = document.getElementById('perfTableBody');
+    const perfCards = document.getElementById('perfCards');
 
-      const tbody = document.getElementById('perfTableBody');
+    // মোবাইলের জন্য Skeleton কার্ড
+    function skeletonCards(count) {
+      return Array.from({ length: count }).map(() => `
+        <div class="skeleton-card">
+          <div class="sk-line title" style="width: 80%; margin-bottom: 0;"></div>
+          <div class="sk-line w50"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line w80"></div>
+        </div>
+      `).join('');
+    }
+
+    // ডেটা আসার আগে Skeleton রো দেখানো
+    function skeletonRows(count) {
+      return Array.from({ length: count }).map(() => `
+        <tr>
+          <td><div class="sk-line title"></div><div class="sk-line w50"></div></td>
+          <td><div class="sk-line w80"></div></td>
+          <td><div class="sk-line w80"></div></td>
+          <td><div class="sk-line w80"></div></td>
+          <td><div class="sk-line w50"></div><div class="sk-line" style="margin-top:8px;"></div></td>
+        </tr>
+      `).join('');
+    }
+
+    // পেজ লোড হলে ডেটা আনা এবং লোডিং হাইড করা
+    async function loadPerformance() {
+      loadingBar.style.display = 'flex';
+      tbody.innerHTML = skeletonRows(6);
+      perfCards.innerHTML = skeletonCards(8);
+
+      let data;
+      try {
+        data = await apiCall('getPerformanceData');
+      } catch (e) {
+        data = null;
+      }
+
+      loadingBar.style.display = 'none';
       
       if (!data || data.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No data available.</td></tr>';
+        perfCards.innerHTML = '<div class="perf-empty">No data available.</div>';
         return;
       }
 
@@ -172,7 +225,7 @@
         const isInactive = t.status !== 'Active';
         
         return `
-        <tr class="perf-row ${isInactive ? 'inactive' : ''}" onclick="openModal(${index})">
+        <tr class="perf-row animate ${isInactive ? 'inactive' : ''}" style="animation-delay: ${Math.min(index * 40, 400)}ms" onclick="openModal(${index})">
           <td>
             <strong>${t.name}</strong><br>
             <small style="color:var(--text-muted)">Flat ${t.flatNumber} (${t.flatName})</small>
@@ -190,6 +243,33 @@
             </div>
           </td>
         </tr>
+      `}).join('');
+
+      // 📱 মোবাইল কার্ড রেন্ডার
+      perfCards.innerHTML = data.map((t, index) => {
+        const isInactive = t.status !== 'Active';
+        const rateColor = t.rate > 80 ? 'var(--success)' : t.rate > 50 ? 'var(--warning)' : 'var(--danger)';
+
+        return `
+        <div class="perf-card animate ${isInactive ? 'inactive' : ''}" style="animation-delay: ${Math.min(index * 40, 400)}ms" onclick="openModal(${index})">
+          <div class="pc-head">
+            <span class="pc-name">${t.name}</span>
+            <span class="pc-flat">${t.flatNumber}</span>
+          </div>
+          <div class="pc-sub">
+            <span class="pc-dot ${isInactive ? 'off' : 'on'}"></span>
+            <span>${isInactive ? 'Inactive' : 'Active'} · ${t.flatName}</span>
+          </div>
+          <div class="pc-row"><span>Expected</span><span>৳ ${t.expected.toLocaleString()}</span></div>
+          <div class="pc-row"><span>Collected</span><span style="color: var(--success);">৳ ${t.collected.toLocaleString()}</span></div>
+          <div class="pc-row"><span>Due</span><span style="color: ${t.due > 0 ? 'var(--danger)' : 'var(--success)'};">৳ ${t.due.toLocaleString()}</span></div>
+          <div class="pc-rate">
+            <div class="pc-rate-top"><span>Rate</span><span>${t.rate}%</span></div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${t.rate}%; background: ${rateColor};"></div>
+            </div>
+          </div>
+        </div>
       `}).join('');
     }
 

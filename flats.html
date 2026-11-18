@@ -6,25 +6,85 @@
   <title>All Flats - House Management</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    .flat-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    @media(min-width: 600px) { .flat-grid { grid-template-columns: repeat(2, 1fr); } }
+    /* ===== Grid: মোবাইলেও ২ কলাম ===== */
+    .flat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    @media(min-width: 600px) { .flat-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; } }
     @media(min-width: 900px) { .flat-grid { grid-template-columns: repeat(3, 1fr); } }
-    .flat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; position: relative; }
+
+    /* ===== Flat Card (কমপ্যাক্ট) ===== */
+    .flat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 10px; position: relative; min-width: 0;
+      animation: cardIn 0.35s ease both;
+    }
     .flat-card.occupied { border-left: 4px solid var(--success); }
     .flat-card.vacant { border-left: 4px solid var(--warning); }
-    .flat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .flat-number { font-size: 18px; font-weight: 700; }
-    .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+
+    .flat-header { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .flat-number { font-size: 15px; font-weight: 700; white-space: nowrap; }
+    .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; white-space: nowrap; }
     .badge.occ { background: #d1fae5; color: #065f46; }
     .badge.vac { background: #fef3c7; color: #92400e; }
-    .flat-details { font-size: 13px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; }
+
+    .flat-details { font-size: 11px; color: var(--text-muted); display: flex; flex-direction: column; gap: 3px; }
+    .flat-details div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .flat-details strong { color: var(--text-main); font-weight: 600; }
+    .flat-rent { margin-top: 2px; padding-top: 4px; border-top: 1px dashed var(--border); }
+    .flat-rent span { color: var(--primary); font-weight: 700; font-size: 12px; }
+
+    @media(min-width: 600px) {
+      .flat-card { padding: 16px; }
+      .flat-header { margin-bottom: 10px; }
+      .flat-number { font-size: 18px; }
+      .badge { padding: 4px 8px; font-size: 12px; }
+      .flat-details { font-size: 13px; gap: 4px; }
+      .flat-rent span { font-size: 13px; }
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== Loading: Spinner + Skeleton ===== */
+    .loading-bar {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      color: var(--text-muted); font-size: 13px; font-weight: 500; margin-bottom: 12px;
+    }
+    .spinner {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid var(--border); border-top-color: var(--primary);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .skeleton-card {
+      background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--border);
+      border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .sk-line {
+      height: 10px; border-radius: 4px;
+      background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s ease-in-out infinite;
+    }
+    .sk-line.title { height: 16px; width: 55%; }
+    .sk-line.w80 { width: 80%; }
+    .sk-line.w60 { width: 60%; }
+    .sk-line.w70 { width: 70%; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .empty-msg { grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0; }
   </style>
 </head>
 <body>
-    <aside class="sidebar">
+  <aside class="sidebar">
     <div class="brand">House Manage</div>
     <a href="dashboard.html" class="nav-item">📊 Dashboard</a>
-    <a href="flats.html" class="nav-item">🏢 All Flats</a>
+    <a href="flats.html" class="nav-item active">🏢 All Flats</a>
     <a href="tenants.html" class="nav-item">👥 Tenants</a>
     <a href="payments.html" class="nav-item">💵 Rent Collection</a>
     <a href="performance.html" class="nav-item">📈 Performance</a>
@@ -37,9 +97,14 @@
   <main class="main-content">
     <div class="container">
       <h1 class="page-title">All Flats Overview</h1>
-      <div class="flat-grid" id="flatsContainer">
-        <div class="empty">Loading flats...</div>
+
+      <!-- Loading indicator (ডেটা এলে হাইড হবে) -->
+      <div class="loading-bar" id="loadingBar">
+        <div class="spinner"></div>
+        <span>Loading flats...</span>
       </div>
+
+      <div class="flat-grid" id="flatsContainer"></div>
     </div>
   </main>
 
@@ -53,30 +118,54 @@
 
   <script src="app.js"></script>
   <script>
+    const container = document.getElementById('flatsContainer');
+    const loadingBar = document.getElementById('loadingBar');
+
+    // ডেটা আসার আগে Skeleton কার্ড দেখানো
+    function showSkeleton(count = 8) {
+      container.innerHTML = Array.from({ length: count }).map(() => `
+        <div class="skeleton-card">
+          <div class="sk-line title"></div>
+          <div class="sk-line w80"></div>
+          <div class="sk-line w60"></div>
+          <div class="sk-line w70"></div>
+        </div>
+      `).join('');
+    }
+
     async function loadFlats() {
-      const data = await apiCall('getFlats');
-      const container = document.getElementById('flatsContainer');
-      
+      showSkeleton();
+
+      let data;
+      try {
+        data = await apiCall('getFlats');
+      } catch (e) {
+        data = null;
+      }
+
+      loadingBar.style.display = 'none';
+
       if (!data || data.length === 0) {
-        container.innerHTML = '<div class="empty">No flats found.</div>';
+        container.innerHTML = '<div class="empty-msg">No flats found.</div>';
         return;
       }
 
-      container.innerHTML = data.map(f => `
-        <div class="flat-card ${f.status.toLowerCase()}">
+      container.innerHTML = data.map((f, i) => `
+        <div class="flat-card ${String(f.status).toLowerCase()}" style="animation-delay: ${Math.min(i * 40, 400)}ms">
           <div class="flat-header">
             <div class="flat-number">Flat ${f.flatNumber}</div>
             <div class="badge ${f.status === 'Occupied' ? 'occ' : 'vac'}">${f.status}</div>
           </div>
           <div class="flat-details">
             <div><strong>Name:</strong> ${f.flatName}</div>
-            <div><strong>Floor:</strong> ${f.floor} | <strong>Direction:</strong> ${f.direction}</div>
+            <div><strong>Floor:</strong> ${f.floor} | <strong>Dir:</strong> ${f.direction}</div>
             <div><strong>Tenant:</strong> ${f.tenantName}</div>
-            <div><strong>Rent:</strong> ৳ ${f.rent}</div>
+            <div class="flat-rent"><strong>Rent:</strong> <span>৳ ${f.rent}</span></div>
           </div>
         </div>
       `).join('');
     }
+
     loadFlats();
   </script>
 </body>

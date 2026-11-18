@@ -7,13 +7,18 @@
   <link rel="stylesheet" href="style.css">
   <style>
     .filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-    .filter-bar input, .filter-bar select { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; background: var(--surface); min-width: 150px; }
-    .filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); }
+    .filter-bar input, .filter-bar select { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; background: var(--surface); min-width: 150px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12); }
 
-    .tenant-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
-    .tenant-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .tenant-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; transition: opacity 0.25s ease; }
+    .tenant-list.refreshing { opacity: 0.45; pointer-events: none; }
+
+    .tenant-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; transition: box-shadow 0.2s ease, transform 0.2s ease; }
+    .tenant-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); transform: translateY(-1px); }
     .tenant-card.inactive { background: #f8fafc; opacity: 0.85; border-color: #cbd5e1; }
-    
+    /* প্রথম লোডে কার্ডগুলো একটা একটা করে ফেড-ইন হবে */
+    .tenant-card.animate { animation: cardIn 0.4s ease both; }
+
     .tenant-info h4 { margin: 0 0 4px 0; font-size: 15px; }
     .tenant-info p { margin: 0; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
     
@@ -24,18 +29,45 @@
     .badge-ongoing { background: #e0f2fe; color: #0369a1; }
 
     .action-btns { display: flex; flex-direction: column; gap: 6px; }
-    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; transition: filter 0.15s ease, transform 0.1s ease; }
+    .btn-sm:hover { filter: brightness(0.95); }
+    .btn-sm:active { transform: scale(0.96); }
     .btn-edit { background: #e0f2fe; color: #0369a1; }
     .btn-moveout { background: #fee2e2; color: #b91c1c; }
 
     .section-title { font-size: 16px; font-weight: 700; color: var(--text-main); margin: 20px 0 10px 0; display: flex; align-items: center; gap: 8px; }
 
+    /* ===== Modal (স্মুথ ওপেন অ্যানিমেশন) ===== */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-    .modal-overlay.active { display: flex; }
+    .modal-overlay.active { display: flex; animation: overlayIn 0.2s ease both; }
     .modal { background: var(--surface); width: 100%; max-width: 500px; border-radius: var(--radius); padding: 20px; max-height: 90vh; overflow-y: auto; }
+    .modal-overlay.active .modal { animation: modalIn 0.25s ease both; }
     .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
     .modal-header h2 { margin: 0; font-size: 18px; }
     .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+
+    /* ===== Keyframes ===== */
+    @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ===== Loading: Spinner + Skeleton ===== */
+    .loading-bar { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); font-size: 13px; font-weight: 500; margin-bottom: 12px; }
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
+
+    .skeleton-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .sk-left { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .sk-right { display: flex; flex-direction: column; gap: 6px; }
+    .sk-line { height: 10px; border-radius: 4px; background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+    .sk-line.title { height: 15px; width: 50%; }
+    .sk-line.w70 { width: 70%; }
+    .sk-line.w40 { width: 40%; }
+    .sk-btn { width: 64px; height: 26px; border-radius: 6px; background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+
+    /* বাটনে লোডিং স্পিনার */
+    .btn-loading::before { content: ''; display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.5); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: -2px; }
   </style>
 </head>
 <body>
@@ -66,6 +98,12 @@
           <option value="Active">Active Only</option>
           <option value="Inactive">Inactive Only</option>
         </select>
+      </div>
+
+      <!-- Loading indicator (ডেটা এলে হাইড হবে) -->
+      <div class="loading-bar" id="loadingBar">
+        <div class="spinner"></div>
+        <span id="loadingText">Loading tenants...</span>
       </div>
 
       <div id="activeSection">
@@ -162,6 +200,14 @@
     let allTenantsData = [];
     let currentMoveOutId = null;
 
+    let isLoading = true;       // ডেটা লোড হচ্ছে কিনা
+    let animateCards = true;    // কার্ড ফেড-ইন অ্যানিমেশন (শুধু লোডের পর প্রথমবার)
+
+    const loadingBar = document.getElementById('loadingBar');
+    const loadingText = document.getElementById('loadingText');
+    const activeContainer = document.getElementById('activeTenantContainer');
+    const inactiveContainer = document.getElementById('inactiveTenantContainer');
+
     function formatMonthYear(dateStr) {
       if (!dateStr) return '';
       const d = new Date(dateStr);
@@ -169,13 +215,60 @@
       return d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     }
 
-    async function loadData() {
-      const data = await apiCall('getTenants');
-      allTenantsData = Array.isArray(data) ? data : []; 
+    // ডেটা আসার আগে Skeleton কার্ড দেখানো
+    function skeletonHTML(count) {
+      return Array.from({ length: count }).map(() => `
+        <div class="skeleton-card">
+          <div class="sk-left">
+            <div class="sk-line title"></div>
+            <div class="sk-line w70"></div>
+            <div class="sk-line w40"></div>
+          </div>
+          <div class="sk-right">
+            <div class="sk-btn"></div>
+            <div class="sk-btn"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // initial = true হলে Skeleton, নইলে (সেভ/মুভ-আউটের পর রিলোড) পুরনো লিস্ট হালকা ঝাপসা করে রাখা
+    async function loadData(initial = true) {
+      isLoading = true;
+      loadingBar.style.display = 'flex';
+
+      if (initial) {
+        loadingText.textContent = 'Loading tenants...';
+        activeContainer.innerHTML = skeletonHTML(4);
+        inactiveContainer.innerHTML = skeletonHTML(2);
+      } else {
+        loadingText.textContent = 'Updating...';
+        activeContainer.classList.add('refreshing');
+        inactiveContainer.classList.add('refreshing');
+      }
+
+      let data;
+      try {
+        data = await apiCall('getTenants');
+      } catch (e) {
+        data = null;
+      }
+
+      allTenantsData = Array.isArray(data) ? data : [];
+
+      isLoading = false;
+      loadingBar.style.display = 'none';
+      activeContainer.classList.remove('refreshing');
+      inactiveContainer.classList.remove('refreshing');
+
+      animateCards = true;
       renderTenants();
+      animateCards = false; // সার্চ/ফিল্টারে বারবার অ্যানিমেশন হবে না
     }
 
     function renderTenants() {
+      if (isLoading) return; // লোড চলাকালীন Skeleton ঠিক রাখা
+
       const searchText = document.getElementById('searchInput').value.trim().toLowerCase();
       const statusFilter = document.getElementById('statusFilter').value;
 
@@ -193,7 +286,7 @@
       const activeTenants = filteredData.filter(t => t.status === 'Active');
       const inactiveTenants = filteredData.filter(t => t.status !== 'Active');
 
-      // ✨ এখানে ফ্ল্যাট নাম্বার অনুযায়ী অ্যাসেন্ডিং (Accending) সর্ট করা হচ্ছে
+      // ✨ ফ্ল্যাট নাম্বার অনুযায়ী অ্যাসেন্ডিং সর্ট
       const sortByFlat = (a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true });
       activeTenants.sort(sortByFlat);
       inactiveTenants.sort(sortByFlat);
@@ -201,15 +294,15 @@
       document.getElementById('activeSection').style.display = (statusFilter === 'Inactive') ? 'none' : 'block';
       document.getElementById('inactiveSection').style.display = (statusFilter === 'Active') ? 'none' : 'block';
 
-      const activeContainer = document.getElementById('activeTenantContainer');
-      const inactiveContainer = document.getElementById('inactiveTenantContainer');
+      const anim = animateCards ? ' animate' : '';
+      const delay = (i) => animateCards ? `style="animation-delay: ${Math.min(i * 50, 500)}ms"` : '';
 
       // 🟢 Active Tenants রেন্ডার
       if (activeTenants.length === 0) {
         activeContainer.innerHTML = '<div class="empty">No active tenants found.</div>';
       } else {
-        activeContainer.innerHTML = activeTenants.map(t => `
-          <div class="tenant-card">
+        activeContainer.innerHTML = activeTenants.map((t, i) => `
+          <div class="tenant-card${anim}" ${delay(i)}>
             <div class="tenant-info">
               <h4>${t.name} <span style="font-size: 12px; font-weight: normal; color: var(--primary);">(Flat ${t.flatNumber})</span></h4>
               <p>📞 ${t.phone} | Rent: ৳${t.rent}</p>
@@ -230,8 +323,8 @@
       if (inactiveTenants.length === 0) {
         inactiveContainer.innerHTML = '<div class="empty">No previous tenants found.</div>';
       } else {
-        inactiveContainer.innerHTML = inactiveTenants.map(t => `
-          <div class="tenant-card inactive">
+        inactiveContainer.innerHTML = inactiveTenants.map((t, i) => `
+          <div class="tenant-card inactive${anim}" ${delay(i)}>
             <div class="tenant-info">
               <h4>${t.name} <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">(Flat ${t.flatNumber})</span></h4>
               <p>📞 ${t.phone}</p>
@@ -246,11 +339,13 @@
     }
 
     async function loadFlatsForDropdown(currentFlat = null) {
-      allFlats = await apiCall('getFlats');
       const select = document.getElementById('flatSelect');
       const hint = document.getElementById('flatHint');
+      select.innerHTML = '<option value="">Loading flats...</option>';
+
+      allFlats = (await apiCall('getFlats')) || [];
       
-      // ✨ ফ্ল্যাটগুলোও সর্ট করে নেওয়া হলো
+      // ✨ ফ্ল্যাটগুলোও সর্ট করে নেওয়া হলো
       allFlats.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
       
       let availableFlats = allFlats.filter(f => f.status === 'Vacant' || f.flatNumber === currentFlat);
@@ -311,7 +406,7 @@
     document.getElementById('tenantForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('saveTenantBtn');
-      btn.textContent = 'Saving...'; btn.disabled = true;
+      btn.textContent = 'Saving...'; btn.disabled = true; btn.classList.add('btn-loading');
 
       const flatSelect = document.getElementById('flatSelect');
       const flatNumber = flatSelect.value;
@@ -339,12 +434,12 @@
         res = await apiCall('addTenant', { data: tenantData, user: session.name });
       }
 
-      btn.textContent = 'Save Tenant'; btn.disabled = false;
+      btn.textContent = 'Save Tenant'; btn.disabled = false; btn.classList.remove('btn-loading');
 
       if (res) {
         alert(editId ? 'Tenant updated successfully!' : 'Tenant added successfully!');
         closeModal();
-        loadData();
+        loadData(false);
       }
     });
 
@@ -374,7 +469,7 @@
       }
 
       const btn = document.getElementById('confirmMoveOutBtn');
-      btn.textContent = 'Processing...'; btn.disabled = true;
+      btn.textContent = 'Processing...'; btn.disabled = true; btn.classList.add('btn-loading');
 
       const tenantData = {
         tenantId: t.tenantId,
@@ -391,19 +486,19 @@
       };
 
       const res = await apiCall('updateTenant', { data: tenantData, user: session.name });
-      btn.textContent = 'Confirm Move Out'; btn.disabled = false;
+      btn.textContent = 'Confirm Move Out'; btn.disabled = false; btn.classList.remove('btn-loading');
 
       if (res) {
         closeMoveOutModal();
         alert(`${t.name} has been moved out. Flat ${t.flatNumber} is now Vacant.`);
-        loadData();
+        loadData(false);
       }
     }
 
     document.getElementById('searchInput').addEventListener('input', renderTenants);
     document.getElementById('statusFilter').addEventListener('change', renderTenants);
 
-    loadData();
+    loadData(true);
   </script>
 </body>
 </html>

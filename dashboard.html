@@ -23,7 +23,7 @@
     }
     @media (min-width: 768px) {
       .chart-container {
-        height: 280px; /* ডেস্কটপের জন্য বড় সাইজ */
+        height: 280px; /* ডেস্কটপের জন্য বড় সাইজ */
       }
     }
 
@@ -35,12 +35,46 @@
     .due-table th, .due-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
     .due-table th { background: var(--bg); color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
     .due-table td { color: var(--text-main); }
+    .due-table tr.animate { animation: cardIn 0.4s ease both; }
     
     @media (max-width: 600px) {
       .due-table th, .due-table td { padding: 6px 4px; font-size: 11px; }
     }
 
     .badge-due { background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; }
+
+    /* ===== Keyframes ===== */
+    @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ===== Loading: Spinner + Skeleton ===== */
+    .loading-bar { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); font-size: 13px; font-weight: 500; margin-bottom: 12px; }
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
+
+    /* KPI ভ্যালুর জায়গায় shimmer */
+    .kpi-value.sk {
+      color: transparent !important; width: 60%; margin: 0 auto; border-radius: 4px;
+      background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%;
+      animation: shimmer 1.2s ease-in-out infinite; user-select: none;
+    }
+
+    /* চার্টের জায়গায় shimmer */
+    .chart-container.chart-loading::after {
+      content: ''; position: absolute; inset: 0; border-radius: 8px;
+      background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%;
+      animation: shimmer 1.2s ease-in-out infinite;
+    }
+    .chart-container.reveal { animation: fadeIn 0.5s ease both; }
+
+    /* KPI কার্ড ফেড-ইন */
+    .kpi-card.animate { animation: cardIn 0.4s ease both; }
+
+    /* Due টেবিলের skeleton */
+    .sk-line { height: 10px; border-radius: 4px; background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+    .sk-line.w80 { width: 80%; }
+    .sk-line.w60 { width: 60%; }
   </style>
 </head>
 <body>
@@ -67,31 +101,37 @@
         </div>
       </div>
 
+      <!-- Loading indicator (ডেটা এলে হাইড হবে) -->
+      <div class="loading-bar" id="loadingBar">
+        <div class="spinner"></div>
+        <span>Loading dashboard...</span>
+      </div>
+
       <!-- 6 KPI Cards -->
       <div class="kpi-grid-6">
         <div class="kpi-card">
           <div class="kpi-title">Total Flats</div>
-          <div class="kpi-value" id="kpi-total-flats">0</div>
+          <div class="kpi-value sk" id="kpi-total-flats">0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-title">Active Tenants</div>
-          <div class="kpi-value" style="color: #0369a1;" id="kpi-tenants">0</div>
+          <div class="kpi-value sk" style="color: #0369a1;" id="kpi-tenants">0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-title">Expected Rent</div>
-          <div class="kpi-value" id="kpi-expected">৳ 0</div>
+          <div class="kpi-value sk" id="kpi-expected">৳ 0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-title">Received (This Month)</div>
-          <div class="kpi-value" style="color: var(--success);" id="kpi-received">৳ 0</div>
+          <div class="kpi-value sk" style="color: var(--success);" id="kpi-received">৳ 0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-title">Paid Tenants</div>
-          <div class="kpi-value" style="color: var(--success);" id="kpi-paid-tenants">0</div>
+          <div class="kpi-value sk" style="color: var(--success);" id="kpi-paid-tenants">0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-title">Prev. Overdue</div>
-          <div class="kpi-value" style="color: var(--danger);" id="kpi-overdue">৳ 0</div>
+          <div class="kpi-value sk" style="color: var(--danger);" id="kpi-overdue">৳ 0</div>
         </div>
       </div>
 
@@ -99,14 +139,14 @@
       <div class="chart-grid">
         <div class="card" style="margin-bottom: 0; padding: 12px;">
           <h3 style="font-size: 13px; margin-bottom: 12px; text-align: center;">Expected vs Received (Last 6 Months)</h3>
-          <div class="chart-container">
+          <div class="chart-container chart-loading">
             <canvas id="collectionChart"></canvas>
           </div>
         </div>
 
         <div class="card" style="margin-bottom: 0; padding: 12px;">
           <h3 style="font-size: 13px; margin-bottom: 12px; text-align: center;">Current Month Status</h3>
-          <div class="chart-container">
+          <div class="chart-container chart-loading">
             <canvas id="statusChart"></canvas>
           </div>
         </div>
@@ -115,7 +155,7 @@
       <!-- Pending vs Completed Chart -->
       <div class="card" style="margin-bottom: 16px; padding: 12px;">
         <h3 style="font-size: 13px; margin-bottom: 12px; text-align: center;">Completed vs Pending Amount (Last 6 Months)</h3>
-        <div class="chart-container">
+        <div class="chart-container chart-loading">
           <canvas id="pendingChart"></canvas>
         </div>
       </div>
@@ -130,14 +170,13 @@
                 <th>Tenant</th>
                 <th>Flat</th>
                 <th>Rent</th>
-                <!-- Paid কলাম বাদ দেওয়া হয়েছে -->
-                <th>Current Due</th> <!-- Due থেকে পরিবর্তন করা হয়েছে -->
+                <!-- Paid কলাম বাদ দেওয়া হয়েছে -->
+                <th>Current Due</th> <!-- Due থেকে পরিবর্তন করা হয়েছে -->
                 <th>Total Due</th>
               </tr>
             </thead>
             <tbody id="dueTableBody">
-              <!-- colspan 6 থেকে 5 করা হয়েছে -->
-              <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+              <!-- ডেটা আসার আগে Skeleton রো এখানে বসবে -->
             </tbody>
           </table>
         </div>
@@ -165,9 +204,61 @@
     Chart.defaults.plugins.legend.labels.boxWidth = 10;
     Chart.defaults.plugins.legend.labels.padding = 10;
 
+    const loadingBar = document.getElementById('loadingBar');
+    const dueBody = document.getElementById('dueTableBody');
+
+    // Due টেবিলের Skeleton রো
+    function skeletonRows(count) {
+      return Array.from({ length: count }).map(() => `
+        <tr>
+          <td><div class="sk-line w80"></div></td>
+          <td><div class="sk-line w60"></div></td>
+          <td><div class="sk-line w80"></div></td>
+          <td><div class="sk-line w80"></div></td>
+          <td><div class="sk-line w80"></div></td>
+        </tr>
+      `).join('');
+    }
+
+    // লোডিং শেষ: KPI shimmer সরানো + কার্ড ফেড-ইন
+    function finishKpiLoading() {
+      document.querySelectorAll('.kpi-value.sk').forEach(el => el.classList.remove('sk'));
+      document.querySelectorAll('.kpi-card').forEach((card, i) => {
+        card.style.animationDelay = (i * 60) + 'ms';
+        card.classList.add('animate');
+      });
+    }
+
+    // লোডিং শেষ: চার্টের shimmer সরিয়ে ফেড-ইন
+    function revealCharts() {
+      document.querySelectorAll('.chart-container').forEach(el => {
+        el.classList.remove('chart-loading');
+        el.classList.add('reveal');
+      });
+    }
+
     async function loadDashboard() {
-      const data = await apiCall('getDashboardData');
-      if (!data) return;
+      loadingBar.style.display = 'flex';
+      dueBody.innerHTML = skeletonRows(4);
+
+      let data;
+      try {
+        data = await apiCall('getDashboardData');
+      } catch (e) {
+        data = null;
+      }
+
+      loadingBar.style.display = 'none';
+
+      if (!data) {
+        finishKpiLoading();
+        document.querySelectorAll('.chart-container').forEach(el => el.classList.remove('chart-loading'));
+        dueBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Could not load data.</td></tr>';
+        return;
+      }
+
+      finishKpiLoading();
+      revealCharts();
 
       document.getElementById('kpi-total-flats').textContent = data.totalFlats;
       document.getElementById('kpi-tenants').textContent = data.activeTenants;
@@ -279,13 +370,12 @@
         }
       });
 
-      // ৪. Due Table (Paid কলাম বাদ দেওয়া হয়েছে)
-      const tbody = document.getElementById('dueTableBody');
+      // ৪. Due Table (Paid কলাম বাদ দেওয়া হয়েছে)
       if (data.tenantDueList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--success);">No outstanding dues! Everyone is up to date.</td></tr>';
+        dueBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--success);">No outstanding dues! Everyone is up to date.</td></tr>';
       } else {
-        tbody.innerHTML = data.tenantDueList.map(t => `
-          <tr>
+        dueBody.innerHTML = data.tenantDueList.map((t, i) => `
+          <tr class="animate" style="animation-delay: ${Math.min(i * 40, 400)}ms">
             <td><strong>${t.name}</strong></td>
             <td>${t.flatNumber}</td>
             <td>৳ ${t.rent.toLocaleString()}</td>

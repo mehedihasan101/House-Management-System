@@ -34,14 +34,17 @@
     }
 
     /* পেমেন্ট কার্ড ডিজাইন */
-    .pay-list { display: flex; flex-direction: column; gap: 10px; }
+    .pay-list { display: flex; flex-direction: column; gap: 10px; transition: opacity 0.25s ease; }
+    .pay-list.refreshing { opacity: 0.45; pointer-events: none; }
     .pay-card { 
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; 
       display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s;
     }
     .pay-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    /* প্রথম লোডে কার্ডগুলো একটা একটা করে ফেড-ইন হবে */
+    .pay-card.animate { animation: cardIn 0.4s ease both; }
     
-    /* ✨ Inactive ভাড়াটিয়ার কার্ড লাল রঙের */
+    /* ✨ Inactive ভাড়াটিয়ার কার্ড লাল রঙের */
     .pay-card.inactive { 
       background-color: #fef2f2; 
       border-color: #fca5a5; 
@@ -64,8 +67,9 @@
 
     /* মডাল CSS */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-    .modal-overlay.active { display: flex; }
+    .modal-overlay.active { display: flex; animation: overlayIn 0.2s ease both; }
     .modal { background: var(--surface); width: 100%; max-width: 500px; border-radius: var(--radius); padding: 20px; max-height: 90vh; overflow-y: auto; }
+    .modal-overlay.active .modal { animation: modalIn 0.25s ease both; }
     .modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
     .modal-header h2 { margin: 0; font-size: 18px; }
     .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
@@ -75,6 +79,30 @@
     .detail-row:last-child { border-bottom: none; }
     .detail-label { color: var(--text-muted); font-weight: 500; }
     .detail-value { font-weight: 600; text-align: right; }
+
+    /* ===== Keyframes ===== */
+    @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ===== Loading: Spinner + Skeleton ===== */
+    .loading-bar { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); font-size: 13px; font-weight: 500; margin-bottom: 12px; }
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
+
+    .skeleton-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .sk-left { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .sk-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .sk-line, .sk-pill { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+    .sk-line { height: 10px; border-radius: 4px; }
+    .sk-line.title { height: 15px; width: 60%; }
+    .sk-line.w70 { width: 70%; }
+    .sk-line.amount { height: 16px; width: 70px; }
+    .sk-pill { height: 16px; width: 80px; border-radius: 12px; }
+
+    /* বাটনে লোডিং স্পিনার */
+    .btn-loading::before { content: ''; display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.5); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: -2px; }
   </style>
 </head>
 <body>
@@ -120,9 +148,13 @@
         </div>
       </div>
 
-      <div class="pay-list" id="paymentContainer">
-        <div class="empty">Loading payments...</div>
+      <!-- Loading indicator (ডেটা এলে হাইড হবে) -->
+      <div class="loading-bar" id="loadingBar">
+        <div class="spinner"></div>
+        <span id="loadingText">Loading payments...</span>
       </div>
+
+      <div class="pay-list" id="paymentContainer"></div>
     </div>
   </main>
 
@@ -207,6 +239,13 @@
     let allTenantsData = [];
     let allFlatsData = [];
 
+    let isLoading = true;       // ডেটা লোড হচ্ছে কিনা
+    let animateCards = true;    // কার্ড ফেড-ইন অ্যানিমেশন (শুধু লোডের পর প্রথমবার)
+
+    const loadingBar = document.getElementById('loadingBar');
+    const loadingText = document.getElementById('loadingText');
+    const payContainer = document.getElementById('paymentContainer');
+
     // তারিখ থেকে শুধু মাস বের করার ফাংশন (2026-10 -> Oct 2026)
     function formatMonth(monthStr) {
       if(!monthStr) return 'N/A';
@@ -220,13 +259,46 @@
       return monthNames[monthIndex] + ' ' + year;
     }
 
-    async function loadPayments() {
-      // পেমেন্টের সাথে টেন্যান্ট স্ট্যাটাস এবং ফ্ল্যাট লিস্ট আনা হচ্ছে
-      const [payments, tenants, flats] = await Promise.all([
-        apiCall('getPayments'),
-        apiCall('getTenants'),
-        apiCall('getFlats')
-      ]);
+    // ডেটা আসার আগে Skeleton কার্ড দেখানো
+    function skeletonHTML(count) {
+      return Array.from({ length: count }).map(() => `
+        <div class="skeleton-card">
+          <div class="sk-left">
+            <div class="sk-line title"></div>
+            <div class="sk-line w70"></div>
+          </div>
+          <div class="sk-right">
+            <div class="sk-line amount"></div>
+            <div class="sk-pill"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // initial = true হলে Skeleton, নইলে (সেভ করার পর রিলোড) পুরনো লিস্ট হালকা ঝাপসা করে রাখা
+    async function loadPayments(initial = true) {
+      isLoading = true;
+      loadingBar.style.display = 'flex';
+
+      if (initial) {
+        loadingText.textContent = 'Loading payments...';
+        payContainer.innerHTML = skeletonHTML(6);
+      } else {
+        loadingText.textContent = 'Updating...';
+        payContainer.classList.add('refreshing');
+      }
+
+      let payments, tenants, flats;
+      try {
+        // পেমেন্টের সাথে টেন্যান্ট স্ট্যাটাস এবং ফ্ল্যাট লিস্ট আনা হচ্ছে
+        [payments, tenants, flats] = await Promise.all([
+          apiCall('getPayments'),
+          apiCall('getTenants'),
+          apiCall('getFlats')
+        ]);
+      } catch (e) {
+        payments = tenants = flats = null;
+      }
 
       allPayments = Array.isArray(payments) ? payments : [];
       allTenantsData = Array.isArray(tenants) ? tenants : [];
@@ -234,11 +306,14 @@
 
       // ফ্ল্যাট ফিল্টার ড্রপডাউনে ডেটা পপুলেট করা (101, 102 সর্ট করে)
       const flatFilter = document.getElementById('f-flat');
+      const selectedFlat = flatFilter.value;
       allFlatsData.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
       flatFilter.innerHTML = '<option value="All">All Flats</option>' + 
         allFlatsData.map(f => `<option value="${f.flatNumber}">Flat ${f.flatNumber}</option>`).join('');
+      flatFilter.value = selectedFlat; // রিলোডের পর সিলেক্টেড ফিল্টার ঠিক রাখা
+      if (flatFilter.value !== selectedFlat) flatFilter.value = 'All';
 
-      // প্রতিটি পেমেন্টের সাথে টেন্যান্টের স্ট্যাটাস (Active/Inactive) মিলিয়ে নেওয়া
+      // প্রতিটি পেমেন্টের সাথে টেন্যান্টের স্ট্যাটাস (Active/Inactive) মিলিয়ে নেওয়া
       allPayments = allPayments.map(p => {
         const t = allTenantsData.find(t => t.name === p.tenantName && String(t.flatNumber) === String(p.flatNumber));
         return {
@@ -248,10 +323,18 @@
         };
       });
 
+      isLoading = false;
+      loadingBar.style.display = 'none';
+      payContainer.classList.remove('refreshing');
+
+      animateCards = true;
       renderPayments();
+      animateCards = false; // সার্চ/ফিল্টারে বারবার অ্যানিমেশন হবে না
     }
 
     function renderPayments() {
+      if (isLoading) return; // লোড চলাকালীন Skeleton ঠিক রাখা
+
       const search = document.getElementById('f-search').value.trim().toLowerCase();
       const flatFilter = document.getElementById('f-flat').value;
       const fromM = document.getElementById('f-from').value;
@@ -282,17 +365,18 @@
         return;
       }
 
-      container.innerHTML = filtered.map(p => {
+      container.innerHTML = filtered.map((p, i) => {
         // ✨ Active না হলে Inactive ক্লাস এবং লাল কালার অ্যাড হবে
         const isInactive = p.tenantStatus !== 'Active';
-        const cardClass = isInactive ? 'pay-card inactive' : 'pay-card';
+        const cardClass = (isInactive ? 'pay-card inactive' : 'pay-card') + (animateCards ? ' animate' : '');
+        const delayStyle = animateCards ? `animation-delay: ${Math.min(i * 40, 400)}ms` : '';
         
         const statusBadge = isInactive 
           ? `<span class="badge-inactive">Inactive ${p.moveOutDate ? '(Out: '+formatMonth(p.moveOutDate)+')' : ''}</span>`
           : `<span class="badge-ongoing">Ongoing</span>`;
 
         return `
-        <div class="${cardClass}" onclick="showDetails('${p.paymentId}')">
+        <div class="${cardClass}" style="${delayStyle}" onclick="showDetails('${p.paymentId}')">
           <div class="pay-info">
             <h4>${p.tenantName} (Flat ${p.flatNumber})</h4>
             <p>Method: ${p.method} | Date: ${p.date}</p>
@@ -338,14 +422,16 @@
     }
 
     async function loadTenantsForDropdown() {
-      const allTenants = await apiCall('getTenants');
-      activeTenants = allTenants.filter(t => t.status === 'Active');
       const select = document.getElementById('tenantSelect');
+      select.innerHTML = '<option value="">Loading tenants...</option>';
+
+      const allTenants = await apiCall('getTenants');
+      activeTenants = (allTenants || []).filter(t => t.status === 'Active');
       if (activeTenants.length === 0) {
         select.innerHTML = '<option value="">No active tenants</option>';
         return;
       }
-      // টেন্যান্ট ড্রপডাউনে ফ্ল্যাট নাম্বার অনুযায়ী সর্ট করা হলো
+      // টেন্যান্ট ড্রপডাউনে ফ্ল্যাট নাম্বার অনুযায়ী সর্ট করা হলো
       activeTenants.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
       select.innerHTML = '<option value="">Select Tenant</option>' + 
         activeTenants.map(t => `<option value="${t.tenantId}">${t.flatNumber} - ${t.name}</option>`).join('');
@@ -371,13 +457,13 @@
     document.getElementById('collectRentForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('savePaymentBtn');
-      btn.textContent = 'Saving...'; btn.disabled = true;
+      btn.textContent = 'Saving...'; btn.disabled = true; btn.classList.add('btn-loading');
 
       const select = document.getElementById('tenantSelect');
       const tenant = activeTenants.find(t => t.tenantId === select.value);
       if(!tenant) {
         alert("Please select a valid tenant.");
-        btn.textContent = 'Save Payment'; btn.disabled = false;
+        btn.textContent = 'Save Payment'; btn.disabled = false; btn.classList.remove('btn-loading');
         return;
       }
 
@@ -396,12 +482,12 @@
       };
 
       const res = await apiCall('collectRent', { data: payData, user: session.name });
-      btn.textContent = 'Save Payment'; btn.disabled = false;
+      btn.textContent = 'Save Payment'; btn.disabled = false; btn.classList.remove('btn-loading');
 
       if (res) {
         alert('Payment saved successfully!');
         closeModal();
-        loadPayments();
+        loadPayments(false);
       }
     });
 
@@ -421,7 +507,7 @@
       renderPayments();
     });
 
-    loadPayments();
+    loadPayments(true);
   </script>
 </body>
 </html>
