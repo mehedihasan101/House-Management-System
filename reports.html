@@ -25,6 +25,12 @@
     .btn-excel { background: #10b981; color: white; }
     .btn-view { background: var(--primary); color: white; }
 
+    /* ✨ From / To একই লাইনে (মোবাইলেও) */
+    .date-range { display: flex; flex-wrap: nowrap; gap: 10px; width: 100%; }
+    .date-field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .date-field label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .control-row .date-field input { flex: none; width: 100%; min-width: 0; box-sizing: border-box; }
+
     /* প্রিভিউ টেবিল (সাধারণ রিপোর্টের জন্য) */
     .preview-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; overflow-x: auto; }
     .preview-table-wrapper { overflow-x: auto; width: 100%; }
@@ -85,6 +91,8 @@
     /* মোবাইল ভিউ টেবিল ফন্ট অ্যাডজাস্টমেন্ট */
     @media (max-width: 600px) {
       .preview-table th, .preview-table td { padding: 6px; font-size: 11px; }
+      .date-range { gap: 8px; }
+      .control-row .date-field input { padding: 8px 6px; font-size: 13px; }
     }
   </style>
 </head>
@@ -121,8 +129,16 @@
             <option value="tenant" selected>👤 Tenant Wise</option>
             <option value="month">📅 Month Wise</option>
           </select>
-          <input type="month" id="f-from-month" title="From Month">
-          <input type="month" id="f-to-month" title="To Month">
+          <div class="date-range">
+            <div class="date-field">
+              <label for="f-from-month">From</label>
+              <input type="month" id="f-from-month" title="From Month">
+            </div>
+            <div class="date-field">
+              <label for="f-to-month">To</label>
+              <input type="month" id="f-to-month" title="To Month">
+            </div>
+          </div>
         </div>
 
         <div id="filter-tenant" class="control-row">
@@ -138,8 +154,16 @@
         </div>
 
         <div id="filter-cost-revenue" class="control-row hidden">
-          <input type="month" id="f-cr-from" title="From Month">
-          <input type="month" id="f-cr-to" title="To Month">
+          <div class="date-range">
+            <div class="date-field">
+              <label for="f-cr-from">From</label>
+              <input type="month" id="f-cr-from" title="From Month">
+            </div>
+            <div class="date-field">
+              <label for="f-cr-to">To</label>
+              <input type="month" id="f-cr-to" title="To Month">
+            </div>
+          </div>
         </div>
 
         <div class="action-btns">
@@ -337,7 +361,15 @@
             let pM = String(p.rentMonth).substring(0, 7);
             return (!from || pM >= from) && (!to || pM <= to);
           });
-          filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+          // ✨ Rent Month অনুযায়ী Descending, তারপর Flat অনুযায়ী Ascending
+          filtered.sort((a, b) => {
+            const mA = String(a.rentMonth).substring(0, 7);
+            const mB = String(b.rentMonth).substring(0, 7);
+            if (mA !== mB) return mB.localeCompare(mA);
+            const flatCmp = String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true });
+            if (flatCmp !== 0) return flatCmp;
+            return new Date(b.date) - new Date(a.date);
+          });
 
           // ✨ মোট কালেকশন বের করা
           const totalAmt = filtered.reduce((sum, p) => sum + Number(p.amount), 0);
