@@ -41,7 +41,6 @@
       display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s;
     }
     .pay-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    /* প্রথম লোডে কার্ডগুলো একটা একটা করে ফেড-ইন হবে */
     .pay-card.animate { animation: cardIn 0.4s ease both; }
     
     /* ✨ Inactive ভাড়াটিয়ার কার্ড লাল রঙের */
@@ -131,7 +130,6 @@
         <input type="text" id="f-search" placeholder="🔍 Search by Tenant or Flat...">
         
         <div class="filter-row">
-          <!-- ✨ নতুন ফ্ল্যাট ফিল্টার ড্রপডাউন -->
           <select id="f-flat">
             <option value="All">All Flats</option>
           </select>
@@ -238,28 +236,25 @@
     let allPayments = [];
     let allTenantsData = [];
     let allFlatsData = [];
+    let rentHistoryData = []; // ✨ নতুন: রেন্ট হিস্ট্রি ডেটা রাখার জন্য
 
-    let isLoading = true;       // ডেটা লোড হচ্ছে কিনা
-    let animateCards = true;    // কার্ড ফেড-ইন অ্যানিমেশন (শুধু লোডের পর প্রথমবার)
+    let isLoading = true;       
+    let animateCards = true;    
 
     const loadingBar = document.getElementById('loadingBar');
     const loadingText = document.getElementById('loadingText');
     const payContainer = document.getElementById('paymentContainer');
 
-    // তারিখ থেকে শুধু মাস বের করার ফাংশন (2026-10 -> Oct 2026)
     function formatMonth(monthStr) {
       if(!monthStr) return 'N/A';
       const match = String(monthStr).match(/^(\d{4})-(\d{2})/);
       if (!match) return monthStr;
-      
       const year = match[1];
       const monthIndex = parseInt(match[2], 10) - 1;
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      
       return monthNames[monthIndex] + ' ' + year;
     }
 
-    // ডেটা আসার আগে Skeleton কার্ড দেখানো
     function skeletonHTML(count) {
       return Array.from({ length: count }).map(() => `
         <div class="skeleton-card">
@@ -275,7 +270,6 @@
       `).join('');
     }
 
-    // initial = true হলে Skeleton, নইলে (সেভ করার পর রিলোড) পুরনো লিস্ট হালকা ঝাপসা করে রাখা
     async function loadPayments(initial = true) {
       isLoading = true;
       loadingBar.style.display = 'flex';
@@ -290,7 +284,6 @@
 
       let payments, tenants, flats;
       try {
-        // পেমেন্টের সাথে টেন্যান্ট স্ট্যাটাস এবং ফ্ল্যাট লিস্ট আনা হচ্ছে
         [payments, tenants, flats] = await Promise.all([
           apiCall('getPayments'),
           apiCall('getTenants'),
@@ -304,21 +297,25 @@
       allTenantsData = Array.isArray(tenants) ? tenants : [];
       allFlatsData = Array.isArray(flats) ? flats : [];
 
-      // ফ্ল্যাট ফিল্টার ড্রপডাউনে ডেটা পপুলেট করা (101, 102 সর্ট করে)
       const flatFilter = document.getElementById('f-flat');
       const selectedFlat = flatFilter.value;
       allFlatsData.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
       flatFilter.innerHTML = '<option value="All">All Flats</option>' + 
         allFlatsData.map(f => `<option value="${f.flatNumber}">Flat ${f.flatNumber}</option>`).join('');
-      flatFilter.value = selectedFlat; // রিলোডের পর সিলেক্টেড ফিল্টার ঠিক রাখা
+      flatFilter.value = selectedFlat; 
       if (flatFilter.value !== selectedFlat) flatFilter.value = 'All';
 
-      // প্রতিটি পেমেন্টের সাথে টেন্যান্টের স্ট্যাটাস (Active/Inactive) মিলিয়ে নেওয়া
       allPayments = allPayments.map(p => {
-        const t = allTenantsData.find(t => t.name === p.tenantName && String(t.flatNumber) === String(p.flatNumber));
+        // ১. যদি পেমেন্টে Tenant ID থাকে, তবে Tenant ID দিয়ে খুঁজবে
+        // ২. না থাকলে Name + Flat দিয়ে খুঁজবে (পুরোনো ডেটার জন্য)
+        const t = allTenantsData.find(tenant => {
+          if (p.tenantId) return String(tenant.tenantId) === String(p.tenantId);
+          return tenant.name === p.tenantName && String(tenant.flatNumber) === String(p.flatNumber);
+        });
+        
         return {
           ...p,
-          tenantStatus: t ? t.status : 'Inactive',
+          tenantStatus: t ? t.status : 'Unknown', // যদি কোনোভাবে না পাওয়া যায়
           moveOutDate: t ? t.moveOut : null
         };
       });
@@ -329,11 +326,11 @@
 
       animateCards = true;
       renderPayments();
-      animateCards = false; // সার্চ/ফিল্টারে বারবার অ্যানিমেশন হবে না
+      animateCards = false; 
     }
 
     function renderPayments() {
-      if (isLoading) return; // লোড চলাকালীন Skeleton ঠিক রাখা
+      if (isLoading) return; 
 
       const search = document.getElementById('f-search').value.trim().toLowerCase();
       const flatFilter = document.getElementById('f-flat').value;
@@ -366,7 +363,6 @@
       }
 
       container.innerHTML = filtered.map((p, i) => {
-        // ✨ Active না হলে Inactive ক্লাস এবং লাল কালার অ্যাড হবে
         const isInactive = p.tenantStatus !== 'Active';
         const cardClass = (isInactive ? 'pay-card inactive' : 'pay-card') + (animateCards ? ' animate' : '');
         const delayStyle = animateCards ? `animation-delay: ${Math.min(i * 40, 400)}ms` : '';
@@ -421,26 +417,62 @@
       document.getElementById('detailsModal').classList.remove('active');
     }
 
+    // ✨ টেন্যান্ট এবং রেন্ট হিস্ট্রি একসাথে লোড করা
     async function loadTenantsForDropdown() {
       const select = document.getElementById('tenantSelect');
       select.innerHTML = '<option value="">Loading tenants...</option>';
 
-      const allTenants = await apiCall('getTenants');
+      const [allTenants, history] = await Promise.all([
+        apiCall('getTenants'),
+        apiCall('getRentHistory')
+      ]);
+
+      rentHistoryData = Array.isArray(history) ? history : [];
       activeTenants = (allTenants || []).filter(t => t.status === 'Active');
+      
       if (activeTenants.length === 0) {
         select.innerHTML = '<option value="">No active tenants</option>';
         return;
       }
-      // টেন্যান্ট ড্রপডাউনে ফ্ল্যাট নাম্বার অনুযায়ী সর্ট করা হলো
       activeTenants.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
       select.innerHTML = '<option value="">Select Tenant</option>' + 
         activeTenants.map(t => `<option value="${t.tenantId}">${t.flatNumber} - ${t.name}</option>`).join('');
     }
 
-    document.getElementById('tenantSelect').addEventListener('change', function() {
-      const tenant = activeTenants.find(t => t.tenantId === this.value);
-      if (tenant) document.getElementById('pAmount').value = tenant.rent;
-    });
+    // ✨ ডাইনামিক রেন্ট ক্যালকুলেশন (কোন মাসের জন্য কত ভাড়া)
+    function updateRentAmount() {
+      const tenantId = document.getElementById('tenantSelect').value;
+      const rentMonth = document.getElementById('pMonth').value; // e.g. "2026-12"
+      
+      if (!tenantId || !rentMonth) return;
+      
+      const tenant = activeTenants.find(t => t.tenantId === tenantId);
+      if (!tenant) return;
+
+      let calculatedRent = tenant.rent; // বেস রেন্ট
+      let latestDate = "1970-01-01";
+
+      // রেন্ট হিস্ট্রি চেক করা
+      rentHistoryData.forEach(h => {
+        if (String(h.tenantId) === String(tenantId)) {
+          const effMonth = String(h.effectiveDate).substring(0, 7); // "2027-01"
+          
+          // যদি কার্যকর হওয়ার মাস <= পেমেন্টের মাস
+          if (effMonth <= rentMonth) {
+            if (h.effectiveDate > latestDate) {
+              latestDate = h.effectiveDate;
+              calculatedRent = Number(h.newRent);
+            }
+          }
+        }
+      });
+
+      document.getElementById('pAmount').value = calculatedRent;
+    }
+
+    // ইভেন্ট লিসেনার (টেন্যান্ট বা মাস চেঞ্জ হলে টাকা আপডেট হবে)
+    document.getElementById('tenantSelect').addEventListener('change', updateRentAmount);
+    document.getElementById('pMonth').addEventListener('change', updateRentAmount);
 
     function openModal() {
       document.getElementById('paymentModal').classList.add('active');
@@ -468,6 +500,7 @@
       }
 
       const payData = {
+        tenantId: tenant.tenantId, 
         flatNumber: tenant.flatNumber,
         flatName: tenant.flatName,
         tenantName: tenant.name,

@@ -59,6 +59,7 @@
     }
     .tenant-header h3 { margin: 0 0 4px 0; color: var(--primary); font-size: 18px; }
     .tenant-header p { margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+    .tenant-header p.rent-note { margin-top: 6px; color: #0369a1; font-size: 12px; }
     
     .tenant-table-wrapper { padding: 0 16px; }
     .tenant-table-wrapper .preview-table th { background: transparent; border-bottom: 1px solid var(--border); }
@@ -75,6 +76,7 @@
     .tenant-summary span { font-weight: 600; color: var(--text-main); }
     .due-green { color: #10b981 !important; }
     .due-red { color: #ef4444 !important; }
+    .adv-blue { color: #0369a1 !important; }
 
     /* ✨ Rent vs Cost Summary ডিজাইন */
     .cr-block { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 20px; background: var(--bg); overflow: hidden; }
@@ -85,6 +87,10 @@
     
     .cr-total { padding: 12px 16px; font-weight: bold; background: var(--surface); border-top: 1px solid var(--border); font-size: 15px; }
     .cr-net { font-size: 20px; font-weight: bold; color: #0f766e; }
+
+    /* ✨ Rent Changes বক্স (Tenant Report) */
+    .rent-box { display: inline-block; text-align: left; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #0369a1; line-height: 1.7; }
+    .rent-box-title { font-weight: 700; margin-bottom: 2px; }
 
     .hidden { display: none !important; }
 
@@ -210,7 +216,43 @@
     let allTenants = [];
     let allFlats = [];
     let allExpenses = [];
+    let rentHistory = [];      // ✨ rent_history শিটের ডেটা (ভাড়া বাড়ানোর রেকর্ড)
     let currentReportData = null;
+    let dataReady = false;
+
+    const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    // ==========================================
+    // হেল্পার ফাংশন
+    // ==========================================
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function getCurMonth() {
+      const d = new Date();
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1);
+    }
+
+    // যেকোনো তারিখ/মাস স্ট্রিং থেকে 'yyyy-MM' বের করা (না পারলে null)
+    function ymKey(v) {
+      const m = String(v || '').match(/^(\d{4})-(\d{2})/);
+      return m ? m[1] + '-' + m[2] : null;
+    }
+
+    function nextMonth(k) {
+      let [y, m] = k.split('-').map(Number);
+      m++;
+      if (m > 12) { m = 1; y++; }
+      return y + '-' + pad2(m);
+    }
+
+    // a থেকে b পর্যন্ত সব মাসের লিস্ট (দুই প্রান্তসহ)
+    function monthsBetween(a, b) {
+      const out = [];
+      if (!a || !b) return out;
+      let k = a, guard = 0;
+      while (k <= b && guard++ < 600) { out.push(k); k = nextMonth(k); }
+      return out;
+    }
 
     function formatMonth(monthStr) {
       if(!monthStr) return 'N/A';
@@ -222,18 +264,153 @@
       return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
     }
 
-    async function initReports() {
-      const [payments, tenants, flats, expenses] = await Promise.all([
-        apiCall('getPayments'),
-        apiCall('getTenants'),
-        apiCall('getFlats'),
-        apiCall('getExpenses')
-      ]);
+    function formatMonthShort(k) {
+      const m = String(k || '').match(/^(\d{4})-(\d{2})/);
+      return m ? MONTH_SHORT[parseInt(m[2], 10) - 1] + ' ' + m[1] : k;
+    }
 
-      allPayments = payments || [];
-      allTenants = tenants || [];
-      allFlats = flats || [];
-      allExpenses = expenses || [];
+    // ==========================================
+    // ✨ ভাড়া ও হিসাবের কোর লজিক (Rent History + Tenant ID ভিত্তিক)
+    // ==========================================
+
+    // কোনো ভাড়াটিয়ার নির্দিষ্ট মাসের ভাড়া কত ছিল
+    //  - ওই মাস বা তার আগের সর্বশেষ বাড়ানোর রেকর্ডের New Rent
+    //  - প্রথম বাড়ানোর আগের মাসগুলোতে প্রথম রেকর্ডের Old Rent
+    //  - কোনো হিস্ট্রি না থাকলে tenant_information এর ভাড়া
+    function getRentForMonth(tenant, month) {
+      let active = 0, latestKey = '', earliestKey = '', earliestOld = 0;
+
+      rentHistory.forEach(h => {
+        if (String(h.tenantId) !== String(tenant.tenantId)) return;
+        const k = ymKey(h.effectiveDate);
+        if (!k) return;
+        if (!earliestKey || k < earliestKey) { earliestKey = k; earliestOld = Number(h.oldRent) || 0; }
+        if (k <= month && k >= latestKey) { latestKey = k; active = Number(h.newRent) || 0; }
+      });
+
+      if (active > 0) return active;
+      if (earliestKey && month < earliestKey) return earliestOld;
+      return Number(tenant.rent) || 0;
+    }
+
+    // ভাড়াটিয়ার সব পেমেন্ট (Tenant ID দিয়ে; Tenant ID না থাকা পুরোনো পেমেন্টের জন্য নাম+ফ্ল্যাট)
+    function paymentsOfTenant(t) {
+      return allPayments.filter(p => {
+        if (p.tenantId) return String(p.tenantId) === String(t.tenantId);
+        return p.tenantName === t.name && String(p.flatNumber) === String(t.flatNumber);
+      });
+    }
+
+    // ভাড়াটিয়ার থাকার শেষ মাস (Move Out মাস, না থাকলে চলতি মাস)
+    function tenantEndMonth(t) {
+      return ymKey(t.moveOut) || getCurMonth();
+    }
+
+    // ভাড়ার ধাপ (যেমন 7500 × 3 মাস, তারপর 8000 × 8 মাস)
+    function buildSegments(months, t) {
+      const segs = [];
+      months.forEach(m => {
+        const r = getRentForMonth(t, m);
+        const last = segs[segs.length - 1];
+        if (last && last.rent === r) { last.count++; last.to = m; }
+        else segs.push({ rent: r, count: 1, from: m, to: m });
+      });
+      return segs;
+    }
+
+    function breakdownText(segs) {
+      if (segs.length < 2) return '';
+      return 'Rent changes: ' + segs.map(s =>
+        `৳${s.rent} (${formatMonthShort(s.from)} to ${formatMonthShort(s.to)}, ${s.count} mo)`
+      ).join(', ');
+    }
+
+    // ভাড়াটিয়ার পুরো হিসাব: মোট ভাড়া (Expected), মোট জমা (Paid), বাকি (Due), অগ্রিম (Advance)
+    function tenantFinance(t) {
+      const startK = ymKey(t.moveIn);
+      const endK = tenantEndMonth(t);
+      const months = startK ? monthsBetween(startK, endK) : [];
+
+      let expected = 0;
+      months.forEach(m => { expected += getRentForMonth(t, m); });
+
+      const payments = paymentsOfTenant(t);
+      const paid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+      const segments = buildSegments(months, t);
+
+      return {
+        payments,
+        expected,
+        paid,
+        due: Math.max(0, expected - paid),
+        advance: Math.max(0, paid - expected),
+        segments,
+        breakdown: breakdownText(segments),
+        // Tenant Report এর Rent Changes বক্সের জন্য লাইন বাই লাইন
+        changeLines: segments.length > 1
+          ? segments.map(s => `${formatMonthShort(s.from)} to ${formatMonthShort(s.to)}, ${s.count} month, rent = ৳${s.rent}`)
+          : [],
+        currentRent: getRentForMonth(t, months.length ? months[months.length - 1] : getCurMonth())
+      };
+    }
+
+    // কোনো মাসে মোট কত ভাড়া ওঠার কথা ছিল (ওই মাসে যারা ছিল তাদের ওই মাসের ভাড়ার যোগফল)
+    // ভবিষ্যতের মাসে কিছু ধরা হয় না (অগ্রিম পেমেন্ট আলাদাভাবে Collected এ দেখা যায়)
+    function expectedForMonth(m) {
+      if (m > getCurMonth()) return { expected: 0, count: 0 };
+      let expected = 0, count = 0;
+      allTenants.forEach(t => {
+        const inM = ymKey(t.moveIn);
+        if (!inM || inM > m) return;
+        const outM = ymKey(t.moveOut);
+        if (outM && outM < m) return;
+        expected += getRentForMonth(t, m);
+        count++;
+      });
+      return { expected, count };
+    }
+
+    function collectedForMonth(m) {
+      return allPayments
+        .filter(p => ymKey(p.rentMonth) === m)
+        .reduce((s, p) => s + Number(p.amount || 0), 0);
+    }
+
+    // From/To ফাঁকা থাকলে ডিফল্ট রেঞ্জ (সবচেয়ে আগের মাস থেকে সর্বশেষ মাস পর্যন্ত)
+    function resolveRange(from, to) {
+      const cur = getCurMonth();
+      let earliest = cur, latest = cur;
+      allTenants.forEach(t => { const k = ymKey(t.moveIn); if (k && k < earliest) earliest = k; });
+      allPayments.forEach(p => {
+        const k = ymKey(p.rentMonth);
+        if (!k) return;
+        if (k < earliest) earliest = k;
+        if (k > latest) latest = k;
+      });
+      return { start: from || earliest, end: to || latest };
+    }
+
+    // ==========================================
+    // ডেটা লোড
+    // ==========================================
+    async function initReports() {
+      try {
+        const [payments, tenants, flats, expenses, history] = await Promise.all([
+          apiCall('getPayments'),
+          apiCall('getTenants'),
+          apiCall('getFlats'),
+          apiCall('getExpenses'),
+          apiCall('getRentHistory')
+        ]);
+
+        allPayments = Array.isArray(payments) ? payments : [];
+        allTenants = Array.isArray(tenants) ? tenants : [];
+        allFlats = Array.isArray(flats) ? flats : [];
+        allExpenses = Array.isArray(expenses) ? expenses : [];
+        rentHistory = Array.isArray(history) ? history : [];
+      } catch (e) {
+        console.error(e);
+      }
 
       const activeTenantsOnly = allTenants.filter(t => t.status === 'Active');
       activeTenantsOnly.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
@@ -249,6 +426,7 @@
         flatSelect.innerHTML += `<option value="${f.flatNumber}">Flat ${f.flatNumber} (${f.flatName})</option>`;
       });
 
+      dataReady = true;
       changeReportType();
     }
 
@@ -265,7 +443,12 @@
       if (type === 'cost_revenue') document.getElementById('filter-cost-revenue').classList.remove('hidden');
     }
 
+    // ==========================================
+    // রিপোর্ট জেনারেট
+    // ==========================================
     function generateReport() {
+      if (!dataReady) return alert("Data is still loading. Please wait a moment and try again.");
+
       const type = document.getElementById('reportType').value;
       const tableHead = document.getElementById('previewHead');
       const tableBody = document.getElementById('previewBody');
@@ -280,7 +463,11 @@
       let title = "";
       let flatBlocksData = [];
       let costRevenueData = null;
+      let rentChangeLines = [];
 
+      // ---------------------------------------
+      // 📅 Monthly Collection Report
+      // ---------------------------------------
       if (type === 'monthly') {
         standardContainer.style.display = 'block';
         flatContainer.style.display = 'none';
@@ -289,8 +476,9 @@
         const from = document.getElementById('f-from-month').value;
         const to = document.getElementById('f-to-month').value;
         const view = document.getElementById('monthlyView').value;
+
+        if (from && to && from > to) return alert("'From' month cannot be after 'To' month.");
         
-        // ✨ ডাইনামিক টাইটেল রেঞ্জ
         let titleRange = "";
         if (from && to) titleRange = `(${formatMonth(from)} - ${formatMonth(to)})`;
         else if (from) titleRange = `(From ${formatMonth(from)})`;
@@ -301,50 +489,15 @@
           // ===== MONTH WISE =====
           title = `Monthly Collection Report - Month Wise ${titleRange}`;
 
-          const now = new Date();
-          const curMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-
-          // সবচেয়ে আগের move-in মাস বের করা
-          let earliest = curMonth;
-          allTenants.forEach(t => {
-            const m = String(t.moveIn || '').substring(0, 7);
-            if (/^\d{4}-\d{2}$/.test(m) && m < earliest) earliest = m;
-          });
-
-          const startM = from || earliest;
-          const endM = to || curMonth;
-
-          // মাসের লিস্ট বানানো
-          const months = [];
-          let [y, mo] = startM.split('-').map(Number);
-          const [ey, emo] = endM.split('-').map(Number);
-          while (y < ey || (y === ey && mo <= emo)) {
-            months.push(y + '-' + String(mo).padStart(2, '0'));
-            mo++;
-            if (mo > 12) { mo = 1; y++; }
-          }
+          const { start, end } = resolveRange(from, to);
 
           let gExpected = 0, gCollected = 0, gDue = 0;
-          const rows = months.map(m => {
-            let expected = 0, tenantCount = 0;
-            allTenants.forEach(t => {
-              const inM = String(t.moveIn || '').substring(0, 7);
-              if (!/^\d{4}-\d{2}$/.test(inM)) return;
-              const outRaw = String(t.moveOut || '').substring(0, 7);
-              const outM = /^\d{4}-\d{2}$/.test(outRaw) ? outRaw : null;
-              if (inM <= m && (!outM || outM >= m)) {
-                expected += Number(t.rent) || 0;
-                tenantCount++;
-              }
-            });
-
-            const collected = allPayments
-              .filter(p => String(p.rentMonth).substring(0, 7) === m)
-              .reduce((s, p) => s + Number(p.amount), 0);
-
+          const rows = monthsBetween(start, end).map(m => {
+            const { expected, count } = expectedForMonth(m);
+            const collected = collectedForMonth(m);
             const due = Math.max(0, expected - collected);
             gExpected += expected; gCollected += collected; gDue += due;
-            return [formatMonth(m), tenantCount, expected, collected, due, m];
+            return [formatMonth(m), count, expected, collected, due, m];
           });
 
           rows.sort((a, b) => b[5].localeCompare(a[5])); // নতুন মাস আগে
@@ -354,33 +507,34 @@
           body.unshift(["SUMMARY:", `Expected: ৳${gExpected}`, `Collected: ৳${gCollected}`, `Due: ৳${gDue}`, ""]);
 
         } else {
-          // ===== TENANT WISE (আগের কোড) =====
+          // ===== TENANT WISE =====
           title = `Monthly Collection Report ${titleRange}`;
 
           let filtered = allPayments.filter(p => {
-            let pM = String(p.rentMonth).substring(0, 7);
+            const pM = ymKey(p.rentMonth) || '';
             return (!from || pM >= from) && (!to || pM <= to);
           });
-          // ✨ Rent Month অনুযায়ী Descending, তারপর Flat অনুযায়ী Ascending
+          // Rent Month অনুযায়ী Descending, তারপর Flat অনুযায়ী Ascending
           filtered.sort((a, b) => {
-            const mA = String(a.rentMonth).substring(0, 7);
-            const mB = String(b.rentMonth).substring(0, 7);
+            const mA = ymKey(a.rentMonth) || '';
+            const mB = ymKey(b.rentMonth) || '';
             if (mA !== mB) return mB.localeCompare(mA);
             const flatCmp = String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true });
             if (flatCmp !== 0) return flatCmp;
             return new Date(b.date) - new Date(a.date);
           });
 
-          // ✨ মোট কালেকশন বের করা
-          const totalAmt = filtered.reduce((sum, p) => sum + Number(p.amount), 0);
+          const totalAmt = filtered.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
           head = ["Date", "Flat", "Tenant", "Rent Month", "Amount", "Method", "Received From"];
           body = filtered.map(p => [p.date, p.flatNumber, p.tenantName, formatMonth(p.rentMonth), p.amount, p.method, p.receivedFrom || 'N/A']);
           
-          // ✨ টেবিলের শুরুতে সামারি রো যোগ করা
           body.unshift(["SUMMARY:", `Total Collection: ৳${totalAmt}`, "", "", "", "", ""]);
         }
 
+      // ---------------------------------------
+      // 👤 Tenant Detailed Report
+      // ---------------------------------------
       } else if (type === 'tenant') {
         standardContainer.style.display = 'block';
         flatContainer.style.display = 'none';
@@ -389,7 +543,9 @@
         const tId = document.getElementById('f-tenant-id').value;
         if (!tId) return alert("Please select a tenant");
         
-        const tenant = allTenants.find(t => t.tenantId === tId);
+        const tenant = allTenants.find(t => String(t.tenantId) === String(tId));
+        if (!tenant) return alert("Tenant not found");
+
         let moveInStr = 'N/A';
         if (tenant.moveIn) {
           const d = new Date(tenant.moveIn);
@@ -398,24 +554,32 @@
         
         title = `Tenant Report: ${tenant.name} (Flat ${tenant.flatNumber}) - In: ${moveInStr}`;
 
-        let tenantPayments = allPayments.filter(p => p.tenantName === tenant.name && String(p.flatNumber) === String(tenant.flatNumber));
-        tenantPayments.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const fin = tenantFinance(tenant);
 
-        let totalPaid = tenantPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-        
-        let moveIn = new Date(tenant.moveIn);
-        let moveOut = tenant.moveOut ? new Date(tenant.moveOut) : new Date();
-        let months = (moveOut.getFullYear() - moveIn.getFullYear()) * 12 + (moveOut.getMonth() - moveIn.getMonth()) + 1;
-        if(months < 1) months = 1;
-        let expected = months * Number(tenant.rent);
-        let due = Math.max(0, expected - totalPaid);
+        const tenantPayments = fin.payments.slice().sort((a, b) => {
+          const mA = ymKey(a.rentMonth) || '';
+          const mB = ymKey(b.rentMonth) || '';
+          if (mA !== mB) return mB.localeCompare(mA);
+          return new Date(b.date) - new Date(a.date);
+        });
 
         head = ["Date", "Rent Month", "Amount", "Method", "Status", "Received From"];
         body = tenantPayments.map(p => [p.date, formatMonth(p.rentMonth), p.amount, p.method, p.status, p.receivedFrom || 'N/A']);
         
-        // টেন্যান্ট রিপোর্টের সামারি রো
-        body.unshift(["SUMMARY:", `Rent: ৳${tenant.rent}`, `Paid: ৳${totalPaid}`, `Due: ৳${due}`, "---", "---"]);
+        const summary = [
+          "SUMMARY:",
+          `Rent: ৳${fin.currentRent}`,
+          `Total Rent: ৳${fin.expected}`,
+          `Paid: ৳${fin.paid}`,
+          `Due: ৳${fin.due}`
+        ];
+        if (fin.advance > 0) summary.push(`Advance: ৳${fin.advance}`);
+        rentChangeLines = fin.changeLines; // Rent Changes আলাদা বক্সে দেখানো হবে
+        body.unshift(summary);
 
+      // ---------------------------------------
+      // 🏢 Flat History
+      // ---------------------------------------
       } else if (type === 'flat') {
         standardContainer.style.display = 'none';
         costRevenueContainer.style.display = 'none';
@@ -425,70 +589,86 @@
         if (!flatNo) return alert("Please select a flat");
         
         const flat = allFlats.find(f => String(f.flatNumber) === String(flatNo));
+        if (!flat) return alert("Flat not found");
         title = `Flat History: ${flat.flatNumber} (${flat.flatName})`;
 
         let flatTenants = allTenants.filter(t => String(t.flatNumber) === String(flatNo));
         flatTenants.sort((a, b) => new Date(b.moveIn) - new Date(a.moveIn));
 
         flatBlocksData = flatTenants.map(t => {
-          let payments = allPayments.filter(p => p.tenantName === t.name && String(p.flatNumber) === String(t.flatNumber));
-          payments.sort((a, b) => new Date(b.date) - new Date(a.date));
-          
-          let totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-          let moveIn = new Date(t.moveIn);
-          let moveOut = t.moveOut ? new Date(t.moveOut) : new Date();
-          let months = (moveOut.getFullYear() - moveIn.getFullYear()) * 12 + (moveOut.getMonth() - moveIn.getMonth()) + 1;
-          if(months < 1) months = 1;
-          let expected = months * Number(t.rent);
-          let due = Math.max(0, expected - totalPaid);
+          const fin = tenantFinance(t);
+          const payments = fin.payments.slice().sort((a, b) => {
+            const mA = ymKey(a.rentMonth) || '';
+            const mB = ymKey(b.rentMonth) || '';
+            if (mA !== mB) return mB.localeCompare(mA);
+            return new Date(b.date) - new Date(a.date);
+          });
 
-          return { tenant: t, payments: payments, expected: expected, totalPaid: totalPaid, due: due };
+          return {
+            tenant: t,
+            payments: payments,
+            expected: fin.expected,
+            totalPaid: fin.paid,
+            due: fin.due,
+            advance: fin.advance,
+            currentRent: fin.currentRent,
+            breakdown: fin.breakdown
+          };
         });
 
-        flatContainer.innerHTML = flatBlocksData.map(block => {
-          const t = block.tenant;
-          const moveOutStr = t.moveOut ? t.moveOut : 'Ongoing';
-          const dueClass = block.due === 0 ? 'due-green' : 'due-red';
-          
-          let payRows = block.payments.map(p => `
-            <tr>
-              <td>${p.date}</td>
-              <td class="month-col">${formatMonth(p.rentMonth)}</td>
-              <td class="amount-col">৳ ${p.amount}</td>
-              <td>${p.method}</td>
-              <td>${p.receivedFrom || 'N/A'}</td>
-            </tr>
-          `).join('');
+        if (flatBlocksData.length === 0) {
+          flatContainer.innerHTML = `<div style="text-align:center; padding:16px;">No tenant history found for this flat.</div>`;
+        } else {
+          flatContainer.innerHTML = flatBlocksData.map(block => {
+            const t = block.tenant;
+            const moveOutStr = t.moveOut ? t.moveOut : 'Ongoing';
+            const dueClass = block.due === 0 ? 'due-green' : 'due-red';
+            
+            let payRows = block.payments.map(p => `
+              <tr>
+                <td>${p.date}</td>
+                <td class="month-col">${formatMonth(p.rentMonth)}</td>
+                <td class="amount-col">৳ ${p.amount}</td>
+                <td>${p.method}</td>
+                <td>${p.receivedFrom || 'N/A'}</td>
+              </tr>
+            `).join('');
 
-          if (block.payments.length === 0) {
-            payRows = `<tr><td colspan="5" style="text-align:center;">No payments recorded.</td></tr>`;
-          }
+            if (block.payments.length === 0) {
+              payRows = `<tr><td colspan="5" style="text-align:center;">No payments recorded.</td></tr>`;
+            }
 
-          return `
-            <div class="tenant-report-block">
-              <div class="tenant-header">
-                <h3>${t.name}</h3>
-                <p>Move In: ${t.moveIn} | Move Out: ${moveOutStr}</p>
-              </div>
-              <div class="tenant-table-wrapper">
-                <div class="preview-table-wrapper">
-                  <table class="preview-table">
-                    <thead>
-                      <tr><th>Date</th><th>Rent Month</th><th>Amount</th><th>Method</th><th>Received From</th></tr>
-                    </thead>
-                    <tbody>${payRows}</tbody>
-                  </table>
+            return `
+              <div class="tenant-report-block">
+                <div class="tenant-header">
+                  <h3>${t.name}</h3>
+                  <p>Move In: ${t.moveIn} | Move Out: ${moveOutStr} | Rent: ৳ ${block.currentRent}</p>
+                  ${block.breakdown ? `<p class="rent-note">${block.breakdown}</p>` : ''}
+                </div>
+                <div class="tenant-table-wrapper">
+                  <div class="preview-table-wrapper">
+                    <table class="preview-table">
+                      <thead>
+                        <tr><th>Date</th><th>Rent Month</th><th>Amount</th><th>Method</th><th>Received From</th></tr>
+                      </thead>
+                      <tbody>${payRows}</tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="tenant-summary">
+                  <span>Total Rent: ৳ ${block.expected}</span>
+                  <span>Total Received: ৳ ${block.totalPaid}</span>
+                  <span class="${dueClass}">Due: ৳ ${block.due} ${block.due === 0 ? '✅' : ''}</span>
+                  ${block.advance > 0 ? `<span class="adv-blue">Advance: ৳ ${block.advance}</span>` : ''}
                 </div>
               </div>
-              <div class="tenant-summary">
-                <span>Total Rent: ৳ ${block.expected}</span>
-                <span>Total Received: ৳ ${block.totalPaid}</span>
-                <span class="${dueClass}">Due: ৳ ${block.due} ${block.due === 0 ? '✅' : ''}</span>
-              </div>
-            </div>
-          `;
-        }).join('');
+            `;
+          }).join('');
+        }
 
+      // ---------------------------------------
+      // 💰 Rent vs Cost Summary
+      // ---------------------------------------
       } else if (type === 'cost_revenue') {
         standardContainer.style.display = 'none';
         flatContainer.style.display = 'none';
@@ -498,20 +678,25 @@
         const toMonth = document.getElementById('f-cr-to').value;
         
         if (!fromMonth && !toMonth) return alert("Please select at least 'From Month' or 'To Month'");
+        if (fromMonth && toMonth && fromMonth > toMonth) return alert("'From' month cannot be after 'To' month.");
 
+        // খরচ (খরচের তারিখের মাস অনুযায়ী)
         const costs = allExpenses.filter(e => {
-          const eM = String(e.date).substring(0, 7);
+          const eM = ymKey(e.date) || '';
           return (!fromMonth || eM >= fromMonth) && (!toMonth || eM <= toMonth);
         });
-        
         costs.sort((a, b) => new Date(b.date) - new Date(a.date));
-        const totalCost = costs.reduce((sum, e) => sum + Number(e.amount), 0);
+        const totalCost = costs.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
+        // ভাড়া আদায় (Rent Month অনুযায়ী), Tenant ID দিয়ে ভাড়াটিয়া খুঁজে
         const rents = allPayments.filter(p => {
-          const pM = String(p.rentMonth).substring(0, 7);
+          const pM = ymKey(p.rentMonth) || '';
           return (!fromMonth || pM >= fromMonth) && (!toMonth || pM <= toMonth);
         }).map(p => {
-          const tenant = allTenants.find(t => String(t.flatNumber) === String(p.flatNumber) && t.name === p.tenantName);
+          const tenant = allTenants.find(t => {
+            if (p.tenantId) return String(t.tenantId) === String(p.tenantId);
+            return String(t.flatNumber) === String(p.flatNumber) && t.name === p.tenantName;
+          });
           return {
             ...p,
             moveIn: tenant ? tenant.moveIn : 'N/A',
@@ -520,16 +705,24 @@
         });
         
         rents.sort((a, b) => {
-          const monthA = String(a.rentMonth).substring(0, 7);
-          const monthB = String(b.rentMonth).substring(0, 7);
-          if (monthA !== monthB) {
-            return monthB.localeCompare(monthA); 
-          }
+          const monthA = ymKey(a.rentMonth) || '';
+          const monthB = ymKey(b.rentMonth) || '';
+          if (monthA !== monthB) return monthB.localeCompare(monthA);
           return String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }); 
         });
         
-        const totalRent = rents.reduce((sum, p) => sum + Number(p.amount), 0);
+        const totalRent = rents.reduce((sum, p) => sum + Number(p.amount || 0), 0);
         const net = totalRent - totalCost;
+
+        // এই রেঞ্জে মোট কত ভাড়া ওঠার কথা (Rent History ধরে) ও কত বাকি
+        const { start, end } = resolveRange(fromMonth, toMonth);
+        let expectedRent = 0, rentDue = 0;
+        monthsBetween(start, end).forEach(m => {
+          const e = expectedForMonth(m).expected;
+          const c = collectedForMonth(m);
+          expectedRent += e;
+          rentDue += Math.max(0, e - c);
+        });
         
         let titleRange = "";
         if (fromMonth && toMonth) titleRange = `${formatMonth(fromMonth)} - ${formatMonth(toMonth)}`;
@@ -538,7 +731,7 @@
         
         title = `Rent vs Cost Summary (${titleRange})`;
 
-        costRevenueData = { fromMonth, toMonth, costs, totalCost, rents, totalRent, net };
+        costRevenueData = { fromMonth, toMonth, costs, totalCost, rents, totalRent, net, expectedRent, rentDue };
 
         costRevenueContainer.innerHTML = `
           <!-- Cost Block -->
@@ -588,16 +781,18 @@
           <div class="cr-block">
             <div class="cr-header cr-header-result">Final Summary</div>
             <div class="cr-total" style="font-size: 16px;">
-              Total Rent: <span style="color: #10b981;">৳ ${totalRent}</span> <br>
+              Expected Rent: <span style="color: #0369a1;">৳ ${expectedRent}</span> <br>
+              Rent Collected: <span style="color: #10b981;">৳ ${totalRent}</span> <br>
+              Rent Due: <span style="color: ${rentDue > 0 ? '#ef4444' : '#10b981'};">৳ ${rentDue}</span> <br>
               Total Cost: <span style="color: #ef4444;">৳ ${totalCost}</span> <br>
               <hr style="border:0; border-top: 1px solid #ccc; margin: 8px 0;">
-              Net Balance: <span class="cr-net" style="color: ${net >= 0 ? '#0f766e' : '#ef4444'};">৳ ${net}</span>
+              Net Balance (Collected - Cost): <span class="cr-net" style="color: ${net >= 0 ? '#0f766e' : '#ef4444'};">৳ ${net}</span>
             </div>
           </div>
         `;
       }
 
-      currentReportData = { type, title, head, body, flatBlocksData, costRevenueData };
+      currentReportData = { type, title, head, body, flatBlocksData, costRevenueData, rentChanges: rentChangeLines };
 
       titleEl.textContent = title;
       titleEl.style.display = 'block';
@@ -609,10 +804,13 @@
         } else {
           tableBody.innerHTML = body.map(row => {
             const isSummary = row[0] === "SUMMARY:";
-            // ✨ সামারি রো-টি পুরো টেবিল জুড়ে (colspan) দেখানোর ব্যবস্থা
+            // সামারি রো-টি পুরো টেবিল জুড়ে (colspan) দেখানোর ব্যবস্থা
             if (isSummary) {
               const summaryText = row.filter(c => c !== "" && c !== "---").join(" | ");
-              return `<tr class="summary-row"><td colspan="${head.length}" style="text-align: center; font-size: 14px;">${summaryText}</td></tr>`;
+              const rentBox = rentChangeLines.length
+                ? `<tr><td colspan="${head.length}" style="padding: 8px 10px;"><div class="rent-box"><div class="rent-box-title">Rent Changes</div>${rentChangeLines.map(l => `<div>${l}</div>`).join('')}</div></td></tr>`
+                : '';
+              return `<tr class="summary-row"><td colspan="${head.length}" style="text-align: center; font-size: 14px;">${summaryText}</td></tr>` + rentBox;
             }
             
             return `<tr>` + row.map((cell, colIdx) => {
@@ -635,34 +833,56 @@
       
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF('p', 'pt', 'a4');
+      const toTk = s => String(s).replace(/৳\s?/g, 'Tk ');
+
+      // পেজ শেষ হয়ে গেলে নতুন পেজ
+      let startY = 80;
+      function ensureSpace(h) {
+        if (startY + h > 780) { doc.addPage(); startY = 40; }
+      }
       
       doc.setFontSize(18);
-      doc.text(currentReportData.title, 40, 40);
+      doc.text(doc.splitTextToSize(currentReportData.title, 515), 40, 40);
       
       doc.setFontSize(10);
       doc.text(`Generated on: ${new Date().toLocaleString()}`, 40, 60);
 
-      let startY = 80;
-
+      // ---- Flat History ----
       if (currentReportData.type === 'flat') {
-        currentReportData.flatBlocksData.forEach((block, index) => {
-          if (startY > 650) { doc.addPage(); startY = 40; }
+        if (currentReportData.flatBlocksData.length === 0) {
+          doc.setFontSize(11);
+          doc.text("No tenant history found for this flat.", 40, startY);
+        }
+
+        currentReportData.flatBlocksData.forEach((block) => {
+          ensureSpace(140);
           
           const t = block.tenant;
           const moveOutStr = t.moveOut ? t.moveOut : 'Ongoing';
 
           doc.setFontSize(14);
+          doc.setFont("helvetica", "bold");
           doc.setTextColor(15, 118, 110);
           doc.text(`${t.name}`, 40, startY);
           
           doc.setFontSize(10);
+          doc.setFont("helvetica", "normal");
           doc.setTextColor(100, 100, 100);
-          doc.text(`Move In: ${t.moveIn} | Move Out: ${moveOutStr}`, 40, startY + 15);
+          doc.text(`Move In: ${t.moveIn} | Move Out: ${moveOutStr} | Rent: Tk ${block.currentRent}`, 40, startY + 15);
+
+          let tableStart = startY + 25;
+          if (block.breakdown) {
+            const bLines = doc.splitTextToSize(toTk(block.breakdown), 515);
+            doc.setFontSize(9);
+            doc.setTextColor(3, 105, 161);
+            doc.text(bLines, 40, startY + 28);
+            tableStart = startY + 28 + bLines.length * 11;
+          }
 
           const pdfBody = block.payments.map(p => [p.date, formatMonth(p.rentMonth), 'Tk ' + p.amount, p.method, p.receivedFrom || 'N/A']);
 
           doc.autoTable({
-            startY: startY + 25,
+            startY: tableStart,
             head: [["Date", "Rent Month", "Amount", "Method", "Received From"]],
             body: pdfBody.length > 0 ? pdfBody : [["No payments recorded", "", "", "", ""]],
             theme: 'grid',
@@ -671,22 +891,27 @@
           });
 
           startY = doc.lastAutoTable.finalY + 15;
+          ensureSpace(60);
 
           doc.setFontSize(11);
+          doc.setFont("helvetica", "normal");
           doc.setTextColor(50, 50, 50);
           doc.text(`Total Rent: Tk ${block.expected}   |   Total Received: Tk ${block.totalPaid}`, 40, startY);
           
           if (block.due === 0) doc.setTextColor(16, 185, 129);
           else doc.setTextColor(239, 68, 68);
           
-          doc.text(`Due: Tk ${block.due} ${block.due === 0 ? '✅' : ''}`, 40, startY + 15);
-          startY += 40;
+          let dueLine = `Due: Tk ${block.due}${block.due === 0 ? ' (Cleared)' : ''}`;
+          if (block.advance > 0) dueLine += `   |   Advance: Tk ${block.advance}`;
+          doc.text(dueLine, 40, startY + 15);
+          startY += 45;
         });
 
         doc.save(`${currentReportData.title.replace(/ /g, '_')}.pdf`);
         return;
       }
 
+      // ---- Rent vs Cost ----
       if (currentReportData.type === 'cost_revenue') {
         const data = currentReportData.costRevenueData;
 
@@ -705,11 +930,13 @@
         });
 
         startY = doc.lastAutoTable.finalY + 10;
+        ensureSpace(40);
         doc.setFontSize(11);
         doc.setTextColor(239, 68, 68);
         doc.text(`Total Cost: Tk ${data.totalCost}`, 40, startY);
         startY += 25;
 
+        ensureSpace(60);
         doc.setFontSize(12);
         doc.setTextColor(16, 185, 129); 
         doc.text("Rent Collections", 40, startY);
@@ -729,48 +956,69 @@
         });
 
         startY = doc.lastAutoTable.finalY + 10;
+        ensureSpace(40);
         doc.setFontSize(11);
         doc.setTextColor(16, 185, 129);
         doc.text(`Total Rent Collected: Tk ${data.totalRent}`, 40, startY);
         startY += 25;
 
+        ensureSpace(120);
         doc.setFontSize(14);
         doc.setTextColor(15, 118, 110); 
         doc.text("Final Summary", 40, startY);
 
         doc.setFontSize(11);
         doc.setTextColor(50, 50, 50);
-        doc.text(`Total Rent: Tk ${data.totalRent}`, 40, startY + 15);
-        doc.text(`Total Cost: Tk ${data.totalCost}`, 40, startY + 30);
+        doc.text(`Expected Rent: Tk ${data.expectedRent}`, 40, startY + 15);
+        doc.text(`Rent Collected: Tk ${data.totalRent}`, 40, startY + 30);
+        doc.text(`Rent Due: Tk ${data.rentDue}`, 40, startY + 45);
+        doc.text(`Total Cost: Tk ${data.totalCost}`, 40, startY + 60);
         
         doc.setFontSize(12);
         doc.setFont("helvetica", "bold");
         if (data.net >= 0) doc.setTextColor(15, 118, 110); 
         else doc.setTextColor(239, 68, 68); 
         
-        doc.text(`Net Balance: Tk ${data.net}`, 40, startY + 50);
+        doc.text(`Net Balance (Collected - Cost): Tk ${data.net}`, 40, startY + 80);
 
         doc.save(`${currentReportData.title.replace(/ /g, '_')}.pdf`);
         return;
       }
 
-      // ✨ সাধারণ রিপোর্টের PDF (Monthly, Tenant)
+      // ---- সাধারণ রিপোর্টের PDF (Monthly, Tenant) ----
       let pdfBody = currentReportData.body;
 
-      // ✨ সামারি রো-টি সুন্দরভাবে এক্সট্রাক্ট করা (সব রিপোর্টের জন্য)
+      // সামারি রো-টি আলাদা করে (লম্বা হলে লাইন ভেঙে) বসানো
       if (pdfBody.length > 0 && pdfBody[0][0] === "SUMMARY:") {
-        const summaryText = pdfBody[0].filter(c => c !== "" && c !== "---").map(c => String(c).replace(/৳/g, 'Tk ')).join("   |   ");
+        const summaryText = toTk(pdfBody[0].filter(c => c !== "" && c !== "---").join("   |   "));
 
         doc.setFontSize(11);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(22, 101, 52);
-        doc.text(summaryText, 40, startY);
+        const lines = doc.splitTextToSize(summaryText, 515);
+        doc.text(lines, 40, startY);
 
-        startY += 20; 
+        startY += lines.length * 14 + 6; 
         pdfBody = pdfBody.slice(1); 
       }
 
-      const cleanBody = pdfBody.map(row => row.map(cell => String(cell).replace(/৳/g, 'Tk ')));
+      // Rent Changes বক্স (সামারির নিচে, লাইন বাই লাইন)
+      if (currentReportData.rentChanges && currentReportData.rentChanges.length) {
+        const rcLines = currentReportData.rentChanges.map(toTk);
+        const boxH = 22 + rcLines.length * 13;
+        doc.setDrawColor(186, 230, 253);
+        doc.setFillColor(240, 249, 255);
+        doc.roundedRect(40, startY - 4, 515, boxH, 4, 4, 'FD');
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(3, 105, 161);
+        doc.text("Rent Changes", 48, startY + 9);
+        doc.setFont("helvetica", "normal");
+        rcLines.forEach((l, i) => doc.text(l, 48, startY + 9 + 13 * (i + 1)));
+        startY += boxH + 8;
+      }
+
+      const cleanBody = pdfBody.map(row => row.map(cell => toTk(cell)));
 
       doc.autoTable({
         startY: startY,
@@ -790,19 +1038,41 @@
       doc.save(`${currentReportData.title.replace(/ /g, '_')}.pdf`);
     }
 
+    // ==========================================
+    // Excel ডাউনলোড লজিক
+    // ==========================================
+    // Excel এ: সামারি রো, তারপর Rent Changes লাইনগুলো, তারপর বাকি ডেটা
+    function excelBodyRows(rd) {
+      const rows = rd.body.slice();
+      const out = [];
+      if (rows.length && rows[0][0] === "SUMMARY:") out.push(rows.shift());
+      if (rd.rentChanges && rd.rentChanges.length) {
+        out.push(["Rent Changes:"]);
+        rd.rentChanges.forEach(l => out.push([l]));
+      }
+      return out.concat(rows);
+    }
+
     function downloadExcel() {
       if (!currentReportData) return alert("Please generate a report first.");
       
       let wsData = [];
       
       if (currentReportData.type === 'flat') {
+        wsData.push([currentReportData.title]);
+        wsData.push([`Generated on: ${new Date().toLocaleString()}`]);
+        wsData.push([]);
+
         currentReportData.flatBlocksData.forEach(block => {
-          wsData.push([`Tenant: ${block.tenant.name}`, `Move In: ${block.tenant.moveIn}`, `Move Out: ${block.tenant.moveOut || 'Ongoing'}`]);
+          wsData.push([`Tenant: ${block.tenant.name}`, `Move In: ${block.tenant.moveIn}`, `Move Out: ${block.tenant.moveOut || 'Ongoing'}`, `Rent: ${block.currentRent}`]);
+          if (block.breakdown) wsData.push([block.breakdown]);
           wsData.push(["Date", "Rent Month", "Amount", "Method", "Received From"]);
           block.payments.forEach(p => {
             wsData.push([p.date, formatMonth(p.rentMonth), p.amount, p.method, p.receivedFrom || 'N/A']);
           });
-          wsData.push([`Summary: Rent - ${block.expected}`, `Paid - ${block.totalPaid}`, `Due - ${block.due}`]);
+          const sumRow = [`Summary: Total Rent - ${block.expected}`, `Paid - ${block.totalPaid}`, `Due - ${block.due}`];
+          if (block.advance > 0) sumRow.push(`Advance - ${block.advance}`);
+          wsData.push(sumRow);
           wsData.push([]);
         });
       } 
@@ -823,13 +1093,15 @@
         data.rents.forEach(r => wsData.push([
           r.date, r.flatNumber, r.tenantName, formatMonth(r.rentMonth), r.moveIn, r.moveOut, r.amount
         ]));
-        wsData.push(["", "", "", "", "", "Total Rent:", data.totalRent]);
+        wsData.push(["", "", "", "", "", "Total Rent Collected:", data.totalRent]);
         wsData.push([]);
 
         wsData.push(["--- FINAL SUMMARY ---"]);
-        wsData.push(["Total Rent", data.totalRent]);
+        wsData.push(["Expected Rent", data.expectedRent]);
+        wsData.push(["Rent Collected", data.totalRent]);
+        wsData.push(["Rent Due", data.rentDue]);
         wsData.push(["Total Cost", data.totalCost]);
-        wsData.push(["Net Balance", data.net]);
+        wsData.push(["Net Balance (Collected - Cost)", data.net]);
       } 
       else {
         wsData = [
@@ -837,7 +1109,7 @@
           [`Generated on: ${new Date().toLocaleString()}`],
           [], 
           currentReportData.head,
-          ...currentReportData.body
+          ...excelBodyRows(currentReportData)
         ];
       }
 

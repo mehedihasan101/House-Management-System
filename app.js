@@ -111,7 +111,7 @@
 
 
 
-const API_URL = "https://script.google.com/macros/s/AKfycbwvesxwvTINTOwXpFL40GGwwKOLK9VFg5aqOQsHNwgnBzyTd1g5AKHCUhMaRfrCdBW2/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbzP4TYWpNvwxf31Uoy3g-sBEqGAaqppMdldHhvvND7uQXX7LX38ViuR9NKfXoLb0m0K/exec"; 
 
 const session = JSON.parse(localStorage.getItem('hm_session'));
 

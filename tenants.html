@@ -16,7 +16,6 @@
     .tenant-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; justify-content: space-between; align-items: center; transition: box-shadow 0.2s ease, transform 0.2s ease; }
     .tenant-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); transform: translateY(-1px); }
     .tenant-card.inactive { background: #f8fafc; opacity: 0.85; border-color: #cbd5e1; }
-    /* প্রথম লোডে কার্ডগুলো একটা একটা করে ফেড-ইন হবে */
     .tenant-card.animate { animation: cardIn 0.4s ease both; }
 
     .tenant-info h4 { margin: 0 0 4px 0; font-size: 15px; }
@@ -28,11 +27,13 @@
     .badge-out { background: #fee2e2; color: #991b1b; }
     .badge-ongoing { background: #e0f2fe; color: #0369a1; }
 
-    .action-btns { display: flex; flex-direction: column; gap: 6px; }
-    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; transition: filter 0.15s ease, transform 0.1s ease; }
+    /* অ্যাকশন বাটনগুলো সাজানো */
+    .action-btns { display: flex; flex-direction: column; gap: 4px; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; transition: filter 0.15s ease, transform 0.1s ease; white-space: nowrap; }
     .btn-sm:hover { filter: brightness(0.95); }
     .btn-sm:active { transform: scale(0.96); }
     .btn-edit { background: #e0f2fe; color: #0369a1; }
+    .btn-rent { background: #fef3c7; color: #92400e; }
     .btn-moveout { background: #fee2e2; color: #b91c1c; }
 
     .section-title { font-size: 16px; font-weight: 700; color: var(--text-main); margin: 20px 0 10px 0; display: flex; align-items: center; gap: 8px; }
@@ -100,7 +101,7 @@
         </select>
       </div>
 
-      <!-- Loading indicator (ডেটা এলে হাইড হবে) -->
+      <!-- Loading indicator -->
       <div class="loading-bar" id="loadingBar">
         <div class="spinner"></div>
         <span id="loadingText">Loading tenants...</span>
@@ -186,6 +187,32 @@
     </div>
   </div>
 
+  <!-- ✨ Increase Rent Modal -->
+  <div class="modal-overlay" id="rentModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Increase Rent</h2>
+        <button class="close-btn" onclick="closeRentModal()">×</button>
+      </div>
+      <form id="rentForm">
+        <input type="hidden" id="r-tenantId">
+        <input type="hidden" id="r-oldRent">
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">
+          Current rent is <b id="r-oldRentText" style="color: var(--text-main);"></b>. Enter the new rent amount below.
+        </p>
+        <div class="input-group">
+          <label>New Rent (৳)</label>
+          <input type="number" id="r-newRent" required>
+        </div>
+        <div class="input-group">
+          <label>Effective Date</label>
+          <input type="date" id="r-date" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full" id="saveRentBtn">Update Rent</button>
+      </form>
+    </div>
+  </div>
+
   <nav class="bottom-nav">
     <a href="dashboard.html" class="b-nav-item">📊 Home</a>
     <a href="reports.html" class="b-nav-item">📄 Reports</a>
@@ -200,8 +227,8 @@
     let allTenantsData = [];
     let currentMoveOutId = null;
 
-    let isLoading = true;       // ডেটা লোড হচ্ছে কিনা
-    let animateCards = true;    // কার্ড ফেড-ইন অ্যানিমেশন (শুধু লোডের পর প্রথমবার)
+    let isLoading = true;       
+    let animateCards = true;    
 
     const loadingBar = document.getElementById('loadingBar');
     const loadingText = document.getElementById('loadingText');
@@ -215,7 +242,6 @@
       return d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     }
 
-    // ডেটা আসার আগে Skeleton কার্ড দেখানো
     function skeletonHTML(count) {
       return Array.from({ length: count }).map(() => `
         <div class="skeleton-card">
@@ -232,7 +258,6 @@
       `).join('');
     }
 
-    // initial = true হলে Skeleton, নইলে (সেভ/মুভ-আউটের পর রিলোড) পুরনো লিস্ট হালকা ঝাপসা করে রাখা
     async function loadData(initial = true) {
       isLoading = true;
       loadingBar.style.display = 'flex';
@@ -263,11 +288,11 @@
 
       animateCards = true;
       renderTenants();
-      animateCards = false; // সার্চ/ফিল্টারে বারবার অ্যানিমেশন হবে না
+      animateCards = false;
     }
 
     function renderTenants() {
-      if (isLoading) return; // লোড চলাকালীন Skeleton ঠিক রাখা
+      if (isLoading) return; 
 
       const searchText = document.getElementById('searchInput').value.trim().toLowerCase();
       const statusFilter = document.getElementById('statusFilter').value;
@@ -286,7 +311,6 @@
       const activeTenants = filteredData.filter(t => t.status === 'Active');
       const inactiveTenants = filteredData.filter(t => t.status !== 'Active');
 
-      // ✨ ফ্ল্যাট নাম্বার অনুযায়ী অ্যাসেন্ডিং সর্ট
       const sortByFlat = (a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true });
       activeTenants.sort(sortByFlat);
       inactiveTenants.sort(sortByFlat);
@@ -297,7 +321,7 @@
       const anim = animateCards ? ' animate' : '';
       const delay = (i) => animateCards ? `style="animation-delay: ${Math.min(i * 50, 500)}ms"` : '';
 
-      // 🟢 Active Tenants রেন্ডার
+      // 🟢 Active Tenants (এখানে Increase Rent বাটন যুক্ত হলো)
       if (activeTenants.length === 0) {
         activeContainer.innerHTML = '<div class="empty">No active tenants found.</div>';
       } else {
@@ -313,13 +337,14 @@
             </div>
             <div class="action-btns">
               <button class="btn-sm btn-edit" onclick="editTenant('${t.tenantId}')">Edit</button>
+              <button class="btn-sm btn-rent" onclick="openRentModal('${t.tenantId}', ${t.rent})">Rent +</button>
               <button class="btn-sm btn-moveout" onclick="openMoveOutModal('${t.tenantId}')">Move Out</button>
             </div>
           </div>
         `).join('');
       }
 
-      // ⚪ Previous Tenants রেন্ডার
+      // ⚪ Previous Tenants
       if (inactiveTenants.length === 0) {
         inactiveContainer.innerHTML = '<div class="empty">No previous tenants found.</div>';
       } else {
@@ -344,8 +369,6 @@
       select.innerHTML = '<option value="">Loading flats...</option>';
 
       allFlats = (await apiCall('getFlats')) || [];
-      
-      // ✨ ফ্ল্যাটগুলোও সর্ট করে নেওয়া হলো
       allFlats.sort((a, b) => String(a.flatNumber).localeCompare(String(b.flatNumber), undefined, { numeric: true }));
       
       let availableFlats = allFlats.filter(f => f.status === 'Vacant' || f.flatNumber === currentFlat);
@@ -443,6 +466,7 @@
       }
     });
 
+    // Move Out Logic
     function openMoveOutModal(tenantId) {
       const t = allTenantsData.find(x => x.tenantId === tenantId);
       if (!t) return;
@@ -494,6 +518,50 @@
         loadData(false);
       }
     }
+
+    // ✨ Increase Rent Logic
+    function openRentModal(tenantId, currentRent) {
+      document.getElementById('rentForm').reset();
+      document.getElementById('r-tenantId').value = tenantId;
+      document.getElementById('r-oldRent').value = currentRent;
+      document.getElementById('r-oldRentText').textContent = '৳ ' + currentRent;
+      document.getElementById('r-newRent').value = currentRent; // ডিফল্ট হিসেবে পুরানো ভাড়া দেখাবে
+      document.getElementById('r-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('rentModal').classList.add('active');
+    }
+
+    function closeRentModal() {
+      document.getElementById('rentModal').classList.remove('active');
+    }
+
+    document.getElementById('rentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('saveRentBtn');
+      const newRent = document.getElementById('r-newRent').value;
+      const oldRent = document.getElementById('r-oldRent').value;
+
+      if(Number(newRent) === Number(oldRent)) {
+        alert("New rent cannot be the same as the old rent.");
+        return;
+      }
+
+      btn.textContent = 'Updating...'; btn.disabled = true; btn.classList.add('btn-loading');
+
+      const rentData = {
+        tenantId: document.getElementById('r-tenantId').value,
+        newRent: newRent,
+        effectiveDate: document.getElementById('r-date').value
+      };
+
+      const res = await apiCall('increaseRent', { data: rentData });
+      btn.textContent = 'Update Rent'; btn.disabled = false; btn.classList.remove('btn-loading');
+
+      if (res) {
+        alert('Rent increased successfully!');
+        closeRentModal();
+        loadData(false); // রেন্ট আপডেট হওয়ায় লিস্ট রিফ্রেশ হবে
+      }
+    });
 
     document.getElementById('searchInput').addEventListener('input', renderTenants);
     document.getElementById('statusFilter').addEventListener('change', renderTenants);
