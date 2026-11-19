@@ -48,6 +48,8 @@
   bar.id = 'navProgress';
   document.body.appendChild(bar);
 
+  let navTarget = null; // je page e jachchi (bar bar click thekate)
+
   function showProgress() {
     bar.classList.remove('run');
     void bar.offsetWidth; // restart transition
@@ -56,6 +58,7 @@
   }
 
   function resetNav() {
+    navTarget = null;
     window.__pageLeaving = false;
     bar.classList.remove('run');
     document.body.classList.remove('nav-leaving');
@@ -74,18 +77,31 @@
     const href = a.getAttribute('href');
     if (!href || href.charAt(0) === '#' || /^(javascript|mailto|tel):/i.test(href)) return;
     if (a.origin !== location.origin) return;                  // baire er link
-    if (a.pathname === location.pathname) return;              // same page
     if (href === 'more.html' && window.__moreSheetReady) return; // More sheet khulbe
 
+    // Je page e achi, oi page er link e abar click korle kichu korbe na.
+    // (Na hole browser page ta reload kore, ar cholte thaka request cancel hoye "Load failed" ashe)
+    if (a.pathname === location.pathname) {
+      e.preventDefault();
+      return;
+    }
+
     e.preventDefault();
+
+    // Same page e already jachchi, abar click korle ignore (double tap / bar bar click)
+    if (navTarget === a.href) return;
+
+    const firstNav = !window.__pageLeaving;
+    navTarget = a.href;
     window.__pageLeaving = true;
     showProgress();
 
-    try { window.stop(); } catch (err) {}   // cholte thaka request cancel
+    // Cholte thaka request cancel (shudhu prothom click e, bar bar stop() korle navigation e gondogol hoy)
+    if (firstNav) { try { window.stop(); } catch (err) {} }
     location.href = a.href;                 // sathe sathe notun page e
 
-    // Jodi kono karone navigation na hoy, 8 sec pore normal e ferot
-    setTimeout(resetNav, 8000);
+    // Jodi kono karone navigation na hoy, 20 sec pore normal e ferot
+    setTimeout(resetNav, 20000);
   }, true);
 })();
 
